@@ -1,0 +1,2196 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#090d16" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="精簡記帳" />
+  <title>精簡記帳 Pocket Ledger</title>
+  <style>
+    :root {
+      --bg: #090d16;
+      --surface: #131b2e;
+      --surface-2: #1c2742;
+      --surface-3: #253354;
+      --text: #f8fafc;
+      --muted: #8b9bb4;
+      --border: rgba(148, 163, 184, 0.14);
+      --primary: #38bdf8;
+      --primary-glow: rgba(56, 189, 248, 0.22);
+      --income: #10b981;
+      --income-soft: rgba(16, 185, 129, 0.15);
+      --expense: #f43f5e;
+      --expense-soft: rgba(244, 63, 94, 0.15);
+      --warn: #f59e0b;
+      --warn-soft: rgba(245, 158, 11, 0.16);
+      --radius-lg: 20px;
+      --radius-md: 14px;
+      --radius-sm: 10px;
+    }
+
+    * {
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    html, body {
+      margin: 0;
+      padding: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, "Noto Sans TC", sans-serif;
+      overscroll-behavior-y: none;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    body {
+      max-width: 460px;
+      margin: 0 auto;
+      min-height: 100dvh;
+      padding-bottom: calc(92px + env(safe-area-inset-bottom));
+      position: relative;
+    }
+
+    /* 隱藏橫向捲軸但保留觸控滑動 */
+    .no-scrollbar::-webkit-scrollbar { display: none; }
+    .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+
+    /* 頂部動態島 Toast 通知 */
+    .toast-bar {
+      position: fixed;
+      top: calc(12px + env(safe-area-inset-top));
+      left: 50%;
+      transform: translateX(-50%) translateY(-130%);
+      background: rgba(19, 27, 46, 0.96);
+      border: 1px solid rgba(56, 189, 248, 0.45);
+      box-shadow: 0 12px 30px rgba(0, 0, 0, 0.55);
+      color: var(--text);
+      padding: 10px 16px;
+      border-radius: 999px;
+      font-size: 13px;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      z-index: 100;
+      transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1);
+      backdrop-filter: blur(12px);
+      white-space: nowrap;
+      max-width: 92vw;
+    }
+    .toast-bar.show {
+      transform: translateX(-50%) translateY(0);
+    }
+
+    /* App Header */
+    header {
+      padding: calc(10px + env(safe-area-inset-top)) 16px 10px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      position: sticky;
+      top: 0;
+      background: rgba(9, 13, 22, 0.85);
+      backdrop-filter: blur(14px);
+      z-index: 20;
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 17px;
+      font-weight: 800;
+      letter-spacing: -0.3px;
+    }
+    .brand-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--primary);
+      box-shadow: 0 0 10px var(--primary);
+    }
+    .cloud-pill {
+      font-size: 12px;
+      font-weight: 600;
+      padding: 6px 12px;
+      border-radius: 999px;
+      background: var(--surface);
+      color: var(--muted);
+      border: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      cursor: pointer;
+    }
+    .cloud-pill.ok { color: var(--income); border-color: rgba(16, 185, 129, 0.35); }
+    .cloud-pill.syncing { color: var(--warn); border-color: rgba(245, 158, 11, 0.35); }
+    .cloud-pill.err { color: var(--expense); border-color: rgba(244, 63, 94, 0.35); }
+
+    .container { padding: 4px 14px 16px; }
+    .tab-page { display: none; animation: fadeIn 0.18s ease-out; }
+    .tab-page.active { display: block; }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(4px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* 頂部黑金錢包總覽卡 */
+    .wallet-banner {
+      background: linear-gradient(145deg, #162238 0%, #0f172a 100%);
+      border: 1px solid rgba(56, 189, 248, 0.2);
+      border-radius: var(--radius-lg);
+      padding: 14px 16px;
+      margin-bottom: 12px;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+    }
+    .wallet-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      margin-bottom: 10px;
+    }
+    .wallet-net-label {
+      font-size: 12px;
+      color: var(--muted);
+      font-weight: 600;
+    }
+    .wallet-net-val {
+      font-size: 24px;
+      font-weight: 800;
+      color: var(--primary);
+      font-variant-numeric: tabular-nums;
+      letter-spacing: -0.5px;
+    }
+    .wallet-sub-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+      padding-top: 10px;
+      border-top: 1px solid var(--border);
+    }
+    .wallet-sub-item {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+    .wallet-sub-label { font-size: 11px; color: var(--muted); }
+    .wallet-sub-val { font-size: 14px; font-weight: 700; font-variant-numeric: tabular-nums; }
+
+    .val-in { color: var(--income); }
+    .val-out { color: var(--expense); }
+    .val-net { color: var(--primary); }
+    .val-warn { color: var(--warn); }
+
+    /* 卡片容器 */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 14px;
+      margin-bottom: 12px;
+    }
+    .card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+    .card-title {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--muted);
+      letter-spacing: 0.2px;
+    }
+
+    /* 支出 / 收入切換膠囊 */
+    .seg-group {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      background: #090d16;
+      border-radius: 12px;
+      padding: 4px;
+      border: 1px solid var(--border);
+      margin-bottom: 12px;
+    }
+    .seg-group.cols-4 { grid-template-columns: repeat(4, 1fr); }
+    .seg-btn {
+      border: none;
+      background: transparent;
+      color: var(--muted);
+      padding: 9px 6px;
+      font-size: 14px;
+      font-weight: 700;
+      border-radius: 9px;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .seg-btn.active.expense-mode {
+      background: var(--expense);
+      color: #fff;
+      box-shadow: 0 2px 10px rgba(244, 63, 94, 0.35);
+    }
+    .seg-btn.active.income-mode {
+      background: var(--income);
+      color: #06281e;
+      box-shadow: 0 2px 10px rgba(16, 185, 129, 0.35);
+    }
+    .seg-btn.active.neutral-mode {
+      background: var(--primary);
+      color: #082032;
+    }
+
+    /* 常用品項膠囊列 */
+    .section-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 6px;
+    }
+    .section-label {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--muted);
+    }
+    .preset-strip {
+      display: flex;
+      gap: 8px;
+      overflow-x: auto;
+      padding: 2px 0 8px;
+      margin-bottom: 6px;
+    }
+    .preset-pill {
+      flex: 0 0 auto;
+      background: var(--surface-2);
+      border: 1px solid rgba(56, 189, 248, 0.22);
+      color: var(--text);
+      border-radius: 12px;
+      padding: 8px 12px;
+      font-size: 13px;
+      font-weight: 600;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      cursor: pointer;
+      min-height: 38px;
+    }
+    .preset-pill:active { transform: scale(0.96); background: var(--surface-3); }
+    .preset-price {
+      color: var(--primary);
+      font-weight: 800;
+      font-variant-numeric: tabular-nums;
+    }
+    .preset-del-x {
+      color: var(--muted);
+      font-size: 12px;
+      padding: 2px 0 2px 4px;
+      opacity: 0.7;
+    }
+
+    /* 手機大字體金額輸入框（font-size >= 16px 防止 iOS 自動縮放） */
+    .amount-box {
+      display: flex;
+      align-items: center;
+      background: #090d16;
+      border: 2px solid var(--border);
+      border-radius: 16px;
+      padding: 10px 14px;
+      margin-bottom: 12px;
+      transition: border-color 0.15s, box-shadow 0.15s;
+    }
+    .amount-box:focus-within {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px var(--primary-glow);
+    }
+    .currency-sign {
+      font-size: 24px;
+      font-weight: 800;
+      color: var(--muted);
+      margin-right: 8px;
+    }
+    .amount-input {
+      width: 100%;
+      background: transparent;
+      border: none;
+      outline: none;
+      color: var(--text);
+      font-size: 30px;
+      font-weight: 800;
+      font-variant-numeric: tabular-nums;
+      padding: 0;
+    }
+    .amount-input::placeholder {
+      color: #475569;
+      font-size: 20px;
+      font-weight: 600;
+    }
+    .clear-amt-btn {
+      background: var(--surface-2);
+      border: none;
+      color: var(--muted);
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      font-size: 13px;
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+
+    /* 付款帳戶橫向卡片 */
+    .acct-strip {
+      display: flex;
+      gap: 8px;
+      overflow-x: auto;
+      padding-bottom: 6px;
+      margin-bottom: 10px;
+    }
+    .acct-card {
+      flex: 0 0 auto;
+      background: #090d16;
+      border: 1.5px solid var(--border);
+      border-radius: 12px;
+      padding: 8px 12px;
+      min-width: 108px;
+      cursor: pointer;
+      transition: all 0.12s;
+    }
+    .acct-card.selected {
+      border-color: var(--primary);
+      background: rgba(56, 189, 248, 0.12);
+    }
+    .acct-card-name {
+      font-size: 13px;
+      font-weight: 700;
+      margin-bottom: 2px;
+      white-space: nowrap;
+    }
+    .acct-card-bal {
+      font-size: 11px;
+      color: var(--muted);
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* 類別大拇指網格 (5x2, 48px 高) */
+    .cat-grid {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 7px;
+      margin-bottom: 12px;
+    }
+    .cat-btn {
+      background: var(--surface-2);
+      border: 1.5px solid transparent;
+      color: var(--text);
+      border-radius: 12px;
+      padding: 8px 2px;
+      min-height: 52px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 3px;
+      cursor: pointer;
+      transition: transform 0.08s;
+    }
+    .cat-btn:active { transform: scale(0.94); }
+    .cat-icon { font-size: 17px; line-height: 1; }
+    .cat-label { font-size: 11px; font-weight: 600; }
+    .cat-btn.selected {
+      border-color: var(--primary);
+      background: rgba(56, 189, 248, 0.18);
+      color: var(--primary);
+    }
+
+    /* 日期與備註列（font-size: 16px 避免 iOS Safari 點擊放大畫面） */
+    .meta-row {
+      display: grid;
+      grid-template-columns: 136px 1fr;
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+    .input, select {
+      width: 100%;
+      background: #090d16;
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 11px 12px;
+      border-radius: 12px;
+      font-size: 16px;
+      outline: none;
+    }
+    .input:focus, select:focus { border-color: var(--primary); }
+
+    /* 當日金流迷你狀態條 */
+    .daily-strip {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: rgba(9, 13, 22, 0.65);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 9px 12px;
+      margin-bottom: 12px;
+      font-size: 12px;
+    }
+    .daily-nums {
+      display: flex;
+      gap: 10px;
+      font-weight: 700;
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* 主行動大按鈕 */
+    .primary-cta {
+      width: 100%;
+      min-height: 50px;
+      background: linear-gradient(135deg, #38bdf8 0%, #0284c7 100%);
+      color: #061320;
+      border: none;
+      border-radius: 14px;
+      font-size: 16px;
+      font-weight: 800;
+      cursor: pointer;
+      box-shadow: 0 4px 16px rgba(56, 189, 248, 0.3);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+    }
+    .primary-cta:active { transform: scale(0.98); }
+
+    .btn-secondary {
+      background: var(--surface-2);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 10px 14px;
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+      width: 100%;
+    }
+    .btn-pill {
+      background: rgba(56, 189, 248, 0.14);
+      color: var(--primary);
+      border: 1px solid rgba(56, 189, 248, 0.35);
+      border-radius: 999px;
+      padding: 5px 11px;
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    /* 收支明細卡片列表 */
+    .day-group-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--muted);
+      padding: 10px 4px 6px;
+    }
+    .tx-list { display: flex; flex-direction: column; gap: 8px; }
+    .tx-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 11px 12px;
+      background: #090d16;
+      border: 1px solid var(--border);
+      border-radius: 14px;
+    }
+    .tx-left {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-width: 0;
+    }
+    .tx-avatar {
+      width: 38px;
+      height: 38px;
+      border-radius: 11px;
+      background: var(--surface-2);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+      flex-shrink: 0;
+    }
+    .tx-info {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+      min-width: 0;
+    }
+    .tx-title {
+      font-size: 14px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+    .tx-sub {
+      font-size: 12px;
+      color: var(--muted);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 200px;
+    }
+    .tx-right {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-shrink: 0;
+    }
+    .tx-amt {
+      font-size: 15px;
+      font-weight: 800;
+      font-variant-numeric: tabular-nums;
+    }
+    .icon-del-btn {
+      background: transparent;
+      border: none;
+      color: var(--muted);
+      width: 30px;
+      height: 30px;
+      border-radius: 8px;
+      font-size: 14px;
+      cursor: pointer;
+    }
+
+    .tag {
+      font-size: 10px;
+      font-weight: 700;
+      padding: 2px 7px;
+      border-radius: 6px;
+      background: var(--surface-2);
+      color: var(--primary);
+    }
+    .tag-credit {
+      background: var(--warn-soft);
+      color: var(--warn);
+    }
+
+    /* 互動式收支月曆 */
+    .cal-weekdays {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      text-align: center;
+      font-size: 11px;
+      color: var(--muted);
+      margin-bottom: 6px;
+      font-weight: 700;
+    }
+    .cal-grid {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 5px;
+      margin-bottom: 12px;
+    }
+    .cal-cell {
+      background: #090d16;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      min-height: 54px;
+      padding: 4px 2px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      align-items: center;
+      cursor: pointer;
+      user-select: none;
+    }
+    .cal-cell.empty {
+      background: transparent;
+      border-color: transparent;
+      cursor: default;
+    }
+    .cal-cell.today {
+      border-color: rgba(56, 189, 248, 0.55);
+    }
+    .cal-cell.selected {
+      border-color: var(--primary);
+      background: rgba(56, 189, 248, 0.18);
+      box-shadow: 0 0 0 1px var(--primary);
+    }
+    .cal-day-num { font-size: 12px; font-weight: 700; }
+    .cal-amounts {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      line-height: 1.15;
+      font-size: 9px;
+      font-weight: 700;
+      font-variant-numeric: tabular-nums;
+      width: 100%;
+      overflow: hidden;
+    }
+
+    /* 統計長條圖 */
+    .stat-row { margin-bottom: 12px; }
+    .stat-head {
+      display: flex;
+      justify-content: space-between;
+      font-size: 13px;
+      font-weight: 600;
+      margin-bottom: 5px;
+    }
+    .bar-bg {
+      height: 9px;
+      background: #090d16;
+      border-radius: 999px;
+      overflow: hidden;
+    }
+    .bar-fill {
+      height: 100%;
+      border-radius: 999px;
+      transition: width 0.25s ease;
+    }
+
+    .form-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+
+    /* 底部懸浮導覽列 (Floating Dock) */
+    .bottom-nav {
+      position: fixed;
+      bottom: calc(10px + env(safe-area-inset-bottom));
+      left: 12px;
+      right: 12px;
+      max-width: 436px;
+      margin: 0 auto;
+      background: rgba(19, 27, 46, 0.92);
+      backdrop-filter: blur(16px);
+      border: 1px solid rgba(148, 163, 184, 0.2);
+      border-radius: 22px;
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      padding: 6px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.55);
+      z-index: 40;
+    }
+    .nav-item {
+      background: transparent;
+      border: none;
+      color: var(--muted);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 3px;
+      padding: 7px 0;
+      border-radius: 16px;
+      font-size: 11px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .nav-item.active {
+      color: var(--primary);
+      background: rgba(56, 189, 248, 0.12);
+    }
+    .nav-icon { font-size: 18px; line-height: 1; }
+
+    /* 手機原生感底部抽屜 (Bottom Sheet Modal) */
+    .sheet-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.65);
+      backdrop-filter: blur(3px);
+      z-index: 80;
+      display: none;
+      align-items: flex-end;
+      justify-content: center;
+    }
+    .sheet-backdrop.open { display: flex; }
+    .bottom-sheet {
+      width: 100%;
+      max-width: 460px;
+      background: var(--surface);
+      border-top: 1px solid rgba(148, 163, 184, 0.25);
+      border-radius: 24px 24px 0 0;
+      padding: 12px 18px calc(24px + env(safe-area-inset-bottom));
+      animation: slideUp 0.22s ease-out;
+    }
+    @keyframes slideUp {
+      from { transform: translateY(100%); }
+      to { transform: translateY(0); }
+    }
+    .sheet-handle {
+      width: 40px;
+      height: 5px;
+      background: var(--surface-3);
+      border-radius: 999px;
+      margin: 0 auto 14px;
+    }
+    .sheet-title {
+      font-size: 16px;
+      font-weight: 800;
+      margin-bottom: 12px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- 頂部動態島 Toast 提示 -->
+  <div id="toastBar" class="toast-bar">
+    <span id="toastText">✅ 已完成記帳</span>
+  </div>
+
+  <header>
+    <div class="brand">
+      <span class="brand-dot"></span>
+      <span>精簡記帳</span>
+    </div>
+    <button id="syncStatusBtn" class="cloud-pill" onclick="switchTab('settings')">
+      ☁️ 未連結雲端
+    </button>
+  </header>
+
+  <div class="container">
+    <!-- 頂部精簡錢包總覽卡 -->
+    <div class="wallet-banner">
+      <div class="wallet-top">
+        <span class="wallet-net-label">本月淨現金流 (收入 - 支出)</span>
+        <span class="wallet-net-val" id="heroNet">$0</span>
+      </div>
+      <div class="wallet-sub-grid">
+        <div class="wallet-sub-item">
+          <span class="wallet-sub-label">本月收入</span>
+          <span class="wallet-sub-val val-in" id="heroIncome">$0</span>
+        </div>
+        <div class="wallet-sub-item">
+          <span class="wallet-sub-label">本月支出</span>
+          <span class="wallet-sub-val val-out" id="heroExpense">$0</span>
+        </div>
+        <div class="wallet-sub-item" onclick="switchTab('settings')" style="cursor:pointer;">
+          <span class="wallet-sub-label">💳 待繳卡費 ▸</span>
+          <span class="wallet-sub-val val-warn" id="heroCreditDue">$0</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================== 分頁 1：秒記台 ==================== -->
+    <section id="tab-entry" class="tab-page active">
+      <div class="card">
+        <div class="seg-group">
+          <button id="modeExpenseBtn" class="seg-btn active expense-mode" onclick="setEntryType('expense')">支出 (-)</button>
+          <button id="modeIncomeBtn" class="seg-btn income-mode" onclick="setEntryType('income')">收入 (+)</button>
+        </div>
+
+        <!-- 1. 常用品項快選（點一下有金額直接入帳，或帶入表單） -->
+        <div class="section-row">
+          <span class="section-label">⚡ 常用品項（點一下閃電帶入/入帳）</span>
+          <button class="btn-pill" onclick="openPresetModal()">＋ 新增品項</button>
+        </div>
+        <div class="preset-strip no-scrollbar" id="presetStrip"></div>
+
+        <!-- 2. 手機原生數字鍵盤金額框 -->
+        <div class="amount-box">
+          <span class="currency-sign">$</span>
+          <input
+            type="number"
+            inputmode="decimal"
+            enterkeyhint="done"
+            id="entryAmountInput"
+            class="amount-input"
+            placeholder="點此輸入金額..."
+            onkeydown="if(event.key==='Enter'){event.preventDefault();submitQuickEntry();}"
+          />
+          <button class="clear-amt-btn" onclick="clearAmountInput()" title="清除">✕</button>
+        </div>
+
+        <!-- 3. 付款/入帳帳戶橫向滑動卡 -->
+        <div class="section-row">
+          <span class="section-label" id="acctSelectorLabel">付款帳戶（左右滑動切換）</span>
+          <span style="font-size:12px;color:var(--primary);font-weight:700;cursor:pointer;" onclick="switchTab('settings')">管理帳戶 ▸</span>
+        </div>
+        <div class="acct-strip no-scrollbar" id="accountSelectorStrip"></div>
+
+        <!-- 4. 圖示化類別網格 (5x2) -->
+        <div class="cat-grid" id="categoryGrid"></div>
+
+        <!-- 5. 日期與備註 -->
+        <div class="meta-row">
+          <input type="date" id="entryDate" class="input" onchange="renderAll()" />
+          <input
+            type="text"
+            id="entryNote"
+            class="input"
+            enterkeyhint="done"
+            placeholder="備註品項（選填）"
+            onkeydown="if(event.key==='Enter'){event.preventDefault();submitQuickEntry();}"
+          />
+        </div>
+
+        <!-- 當日金流即時狀態條 -->
+        <div class="daily-strip">
+          <span id="selectedDayLabel" style="color:var(--muted);font-weight:600;">📅 今日金流</span>
+          <div class="daily-nums">
+            <span class="val-in" id="selectedDayIn">+$0</span>
+            <span class="val-out" id="selectedDayOut">-$0</span>
+            <span class="val-net" id="selectedDayNet">淨 $0</span>
+          </div>
+        </div>
+
+        <button class="primary-cta" onclick="submitQuickEntry()">
+          <span>＋ 記一筆</span>
+        </button>
+      </div>
+
+      <!-- 按日分組明細 -->
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">📅 每日金流與收支明細</span>
+          <span class="tag" id="recentCountLabel">0 筆</span>
+        </div>
+        <div class="tx-list" id="recentTxList"></div>
+      </div>
+    </section>
+
+    <!-- ==================== 分頁 2：日曆與統計 ==================== -->
+    <section id="tab-stats" class="tab-page">
+      <div class="card">
+        <div class="seg-group cols-4">
+          <button id="periodDayBtn" class="seg-btn neutral-mode" onclick="setStatsPeriod('day')">按日</button>
+          <button id="periodMonthBtn" class="seg-btn active neutral-mode" onclick="setStatsPeriod('month')">按月</button>
+          <button id="periodQuarterBtn" class="seg-btn neutral-mode" onclick="setStatsPeriod('quarter')">按季</button>
+          <button id="periodYearBtn" class="seg-btn neutral-mode" onclick="setStatsPeriod('year')">按年</button>
+        </div>
+
+        <div style="display:flex;justify-content:space-between;align-items:center;margin:8px 0 12px;">
+          <button class="btn-pill" onclick="shiftPeriod(-1)">◀ 上一區間</button>
+          <span style="font-weight:800;font-size:15px;" id="statsPeriodLabel"></span>
+          <button class="btn-pill" onclick="shiftPeriod(1)">下一區間 ▶</button>
+        </div>
+
+        <div class="wallet-sub-grid" style="background:#090d16;padding:12px;border-radius:14px;border:1px solid var(--border);">
+          <div class="wallet-sub-item">
+            <span class="wallet-sub-label">區間總收入</span>
+            <span class="wallet-sub-val val-in" id="statIn">$0</span>
+          </div>
+          <div class="wallet-sub-item">
+            <span class="wallet-sub-label">區間總支出</span>
+            <span class="wallet-sub-val val-out" id="statOut">$0</span>
+          </div>
+          <div class="wallet-sub-item">
+            <span class="wallet-sub-label">結餘 (儲蓄率)</span>
+            <span class="wallet-sub-val val-net" id="statNet">$0</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- 互動式收支月曆 -->
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title" id="calTitleLabel">📅 收支月曆（點日期查明細）</span>
+          <button class="btn-pill" onclick="jumpToTodayCalendar()">回到今天</button>
+        </div>
+        <div class="cal-weekdays">
+          <span>日</span><span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span>
+        </div>
+        <div class="cal-grid" id="calendarGrid"></div>
+
+        <div class="daily-strip" style="margin-bottom:8px;">
+          <span id="calSelectedDateTitle" style="font-weight:700;color:var(--primary);">📆 選取日明細</span>
+          <div class="daily-nums">
+            <span class="val-in" id="calDayIn">+$0</span>
+            <span class="val-out" id="calDayOut">-$0</span>
+            <span class="val-net" id="calDayNet">淨 $0</span>
+          </div>
+        </div>
+        <div style="display:flex;justify-content:flex-end;margin-bottom:10px;">
+          <button class="btn-pill" onclick="quickAddForSelectedCalendarDate()">＋ 在此日補記一筆</button>
+        </div>
+        <div class="tx-list" id="calSelectedDayTxList"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">📊 支出類別排行榜</span>
+          <span class="tag" id="statCatTotal">$0</span>
+        </div>
+        <div id="categoryBreakdownList"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">💳 付款方式佔比（刷卡 vs 帳戶扣款）</span>
+        </div>
+        <div id="accountBreakdownList"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">💰 收入來源結構</span>
+        </div>
+        <div id="incomeBreakdownList"></div>
+      </div>
+    </section>
+
+    <!-- ==================== 分頁 3：訂閱與週期支出 ==================== -->
+    <section id="tab-recurring" class="tab-page">
+      <div class="wallet-banner">
+        <div class="wallet-sub-grid" style="grid-template-columns:1fr 1fr;border-top:none;padding-top:0;">
+          <div class="wallet-sub-item">
+            <span class="wallet-sub-label">固定訂閱折合月支出</span>
+            <span class="wallet-sub-val val-out" style="font-size:18px;" id="recMonthlyTotal">$0 / 月</span>
+          </div>
+          <div class="wallet-sub-item">
+            <span class="wallet-sub-label">固定訂閱折合年總額</span>
+            <span class="wallet-sub-val val-warn" style="font-size:18px;" id="recYearlyTotal">$0 / 年</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">🔁 新增週期收支 / 訂閱項目</span>
+          <button class="btn-pill" onclick="runRecurringEngine(true)">立即檢核入帳</button>
+        </div>
+        <div class="form-row">
+          <input type="text" id="recName" class="input" placeholder="名稱 (Netflix/房租)" />
+          <input type="number" inputmode="decimal" id="recAmount" class="input" placeholder="金額" />
+        </div>
+        <div class="form-row">
+          <select id="recCycle">
+            <option value="monthly">每月固定</option>
+            <option value="quarterly">每季 (每3個月)</option>
+            <option value="yearly">每年固定</option>
+          </select>
+          <input type="number" inputmode="numeric" id="recDay" class="input" min="1" max="28" value="1" placeholder="扣款日(1-28)" />
+        </div>
+        <div class="form-row">
+          <select id="recAccountSelect"></select>
+          <input type="text" id="recCategory" class="input" value="訂閱固定" placeholder="歸屬類別" />
+        </div>
+        <div class="form-row" style="margin-bottom:0;">
+          <select id="recType">
+            <option value="expense">週期支出 (-)</option>
+            <option value="income">週期收入 (+)</option>
+          </select>
+          <button class="primary-cta" style="min-height:44px;font-size:14px;" onclick="addRecurringItem()">＋ 加入週期</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">啟用中的週期項目</span>
+          <span class="tag" id="recCountLabel">0 項</span>
+        </div>
+        <div class="tx-list" id="recurringList"></div>
+      </div>
+    </section>
+
+    <!-- ==================== 分頁 4：帳戶餘額、信用卡繳費與雲端 ==================== -->
+    <section id="tab-settings" class="tab-page">
+      <div class="wallet-banner">
+        <div class="wallet-top">
+          <span class="wallet-net-label">扣除卡費後真實可用淨值</span>
+          <span class="wallet-net-val" id="totalTrueNetWorth">$0</span>
+        </div>
+        <div class="wallet-sub-grid" style="grid-template-columns:1fr 1fr;">
+          <div class="wallet-sub-item">
+            <span class="wallet-sub-label">🏦 銀行+現金總額</span>
+            <span class="wallet-sub-val val-in" id="totalCashBankVal">$0</span>
+          </div>
+          <div class="wallet-sub-item">
+            <span class="wallet-sub-label">💳 信用卡未繳總額</span>
+            <span class="wallet-sub-val val-warn" id="totalCreditDebtVal">$0</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">🏦 現金 / 銀行 / 投資帳戶</span>
+          <button class="btn-pill" onclick="openAccountModal()">＋ 新增帳戶</button>
+        </div>
+        <div class="tx-list" id="cashAccountList" style="margin-bottom:14px;"></div>
+
+        <div class="card-header" style="margin-top:8px;">
+          <span class="card-title">💳 信用卡（消費累積待繳，月底一鍵扣銀行）</span>
+        </div>
+        <div class="tx-list" id="creditAccountList"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">☁️ Google Sheet 雲端即時同步</span>
+          <a href="https://docs.google.com/spreadsheets/d/1Gfq3xIJ76_dw0y3kjDRAqt4tLj3fgicvbRNO8QIWSFE/edit" target="_blank" rel="noopener" class="btn-pill" style="text-decoration:none;">開啟試算表 ↗</a>
+        </div>
+        <p style="font-size:12px; color:var(--muted); margin-top:0; line-height:1.5;">
+          已自動綁定你的專屬試算表（<code>精簡記帳_Pocket_Ledger</code>）。每次記帳自動背景同步至試算表。
+        </p>
+        <input type="url" id="gasUrlInput" class="input" placeholder="https://script.google.com/macros/s/....../exec" style="margin-bottom:10px;" />
+        <div class="form-row" style="margin-bottom:4px;">
+          <button class="primary-cta" style="min-height:44px;font-size:14px;" onclick="saveGasUrlAndPush()">儲存並上傳</button>
+          <button class="btn-secondary" onclick="pullFromGoogleSheet()">從 Sheet 拉回</button>
+        </div>
+        <div id="syncLogText" style="font-size:11px; color:var(--muted); margin-top:6px;"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-header"><span class="card-title">📦 本地資料備份（CSV / JSON）</span></div>
+        <div class="form-row" style="margin-bottom:0;">
+          <button class="btn-secondary" onclick="exportCSV()">匯出 Excel CSV</button>
+          <button class="btn-secondary" onclick="exportJSON()">匯出完整 JSON</button>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <!-- 底部懸浮膠囊導覽列 -->
+  <nav class="bottom-nav">
+    <button class="nav-item active" data-tab="entry" onclick="switchTab('entry')">
+      <span class="nav-icon">⚡</span>
+      <span>秒記</span>
+    </button>
+    <button class="nav-item" data-tab="stats" onclick="switchTab('stats')">
+      <span class="nav-icon">📅</span>
+      <span>日曆與統計</span>
+    </button>
+    <button class="nav-item" data-tab="recurring" onclick="switchTab('recurring')">
+      <span class="nav-icon">🔁</span>
+      <span>訂閱週期</span>
+    </button>
+    <button class="nav-item" data-tab="settings" onclick="switchTab('settings')">
+      <span class="nav-icon">🏦</span>
+      <span>帳戶與卡費</span>
+    </button>
+  </nav>
+
+  <!-- ==================== 手機底部抽屜 (Bottom Sheet Modals) ==================== -->
+
+  <!-- 1. 新增常用品項抽屜 -->
+  <div id="presetModal" class="sheet-backdrop" onclick="if(event.target===this)closeModal('presetModal')">
+    <div class="bottom-sheet">
+      <div class="sheet-handle"></div>
+      <div class="sheet-title">
+        <span>⚡ 新增常用品項快捷鍵</span>
+        <button class="clear-amt-btn" onclick="closeModal('presetModal')">✕</button>
+      </div>
+      <div class="form-row">
+        <input type="text" id="newPresetName" class="input" placeholder="品項名稱（例：拿鐵、便當）" />
+        <input type="number" inputmode="decimal" id="newPresetAmount" class="input" placeholder="固定金額（可留空）" />
+      </div>
+      <p style="font-size:12px;color:var(--muted);margin:4px 0 12px;">
+        💡 將自動綁定目前選取的「類別」與「付款帳戶」。若填寫固定金額，點一下常用品項即可直接帶入！
+      </p>
+      <button class="primary-cta" onclick="addNewPreset()">儲存常用品項</button>
+    </div>
+  </div>
+
+  <!-- 2. 繳清信用卡費抽屜 -->
+  <div id="payCardModal" class="sheet-backdrop" onclick="if(event.target===this)closeModal('payCardModal')">
+    <div class="bottom-sheet">
+      <div class="sheet-handle"></div>
+      <div class="sheet-title">
+        <span id="payCardTitle">💳 繳清信用卡費</span>
+        <button class="clear-amt-btn" onclick="closeModal('payCardModal')">✕</button>
+      </div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:6px;">選擇要扣款的銀行或現金帳戶：</div>
+      <select id="payFromAccountSelect" style="margin-bottom:10px;"></select>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:6px;">本次繳款金額（不會重複計入當月支出）：</div>
+      <input type="number" inputmode="decimal" id="payCardAmountInput" class="input" style="margin-bottom:14px;" />
+      <button class="primary-cta" onclick="confirmPayCreditCard()">確認扣款並沖銷卡費</button>
+    </div>
+  </div>
+
+  <!-- 3. 新增 / 校準帳戶抽屜 -->
+  <div id="accountModal" class="sheet-backdrop" onclick="if(event.target===this)closeModal('accountModal')">
+    <div class="bottom-sheet">
+      <div class="sheet-handle"></div>
+      <div class="sheet-title">
+        <span id="accountModalTitle">🏦 新增或校準帳戶</span>
+        <button class="clear-amt-btn" onclick="closeModal('accountModal')">✕</button>
+      </div>
+      <input type="hidden" id="editAccountId" value="" />
+      <div class="form-row">
+        <input type="text" id="acctNameInput" class="input" placeholder="名稱（例：台新Richart）" />
+        <select id="acctKindInput">
+          <option value="cash">💵 現金 / 銀行活存</option>
+          <option value="credit">💳 信用卡</option>
+          <option value="invest">📈 投資部位</option>
+        </select>
+      </div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:6px;">目前實際餘額（信用卡請填目前已刷未繳金額）：</div>
+      <input type="number" inputmode="decimal" id="acctBalanceInput" class="input" placeholder="0" style="margin-bottom:14px;" />
+      <button class="primary-cta" onclick="upsertAccount()">儲存帳戶設定</button>
+    </div>
+  </div>
+
+  <script>
+    const STORAGE_KEY = 'POCKET_LEDGER_STATE_V2';
+    const LEGACY_KEY = 'POCKET_LEDGER_STATE_V1';
+
+    const EXPENSE_CATS = [
+      { name: '餐飲', icon: '🍜' },
+      { name: '交通', icon: '🚇' },
+      { name: '日常', icon: '🧻' },
+      { name: '居住', icon: '🏠' },
+      { name: '娛樂', icon: '🎮' },
+      { name: '醫療', icon: '💊' },
+      { name: '購物', icon: '🛍️' },
+      { name: '進修', icon: '📚' },
+      { name: '訂閱固定', icon: '🔁' },
+      { name: '其他支出', icon: '📦' }
+    ];
+
+    const INCOME_CATS = [
+      { name: '薪資', icon: '💼' },
+      { name: '獎金', icon: '🧧' },
+      { name: '事業收入', icon: '🚀' },
+      { name: '股息投資', icon: '📈' },
+      { name: '兼職', icon: '⚡' },
+      { name: '其他收入', icon: '✨' }
+    ];
+
+    const DEFAULT_ACCOUNTS = [
+      { id: 'acct_cash', name: '💵 現金錢包', kind: 'cash', balance: 0, updatedAt: '' },
+      { id: 'acct_bank', name: '🏦 銀行活存', kind: 'cash', balance: 0, updatedAt: '' },
+      { id: 'acct_card', name: '💳 主力信用卡', kind: 'credit', balance: 0, updatedAt: '' }
+    ];
+
+    const DEFAULT_PRESETS = [
+      { id: 'pre_1', name: '🍱 便當午餐', type: 'expense', category: '餐飲', amount: 120, accountId: 'acct_cash' },
+      { id: 'pre_2', name: '☕ 咖啡飲料', type: 'expense', category: '餐飲', amount: 65, accountId: 'acct_card' },
+      { id: 'pre_3', name: '🚇 捷運通勤', type: 'expense', category: '交通', amount: 35, accountId: 'acct_card' }
+    ];
+
+    const DEFAULT_GAS_URL = 'https://script.google.com/macros/s/AKfycbz0fPKxpj7dhZcIfWzOkDcJgLfuSqYqOXZBCtl2XeTOUpE4UCEmX84SOeYlmAFi2mEb/exec';
+
+    let state = {
+      transactions: [],
+      accounts: [],
+      presets: [],
+      recurring: [],
+      gasUrl: DEFAULT_GAS_URL,
+      lastSyncAt: ''
+    };
+
+    let currentEntryType = 'expense';
+    let currentCategory = EXPENSE_CATS[0].name;
+    let currentAccountId = 'acct_cash';
+    let activePayCardId = '';
+
+    let statsPeriod = 'month';
+    let statsCursorDate = new Date();
+    let toastTimer = null;
+
+    function showToast(msg) {
+      if (navigator.vibrate) navigator.vibrate(12);
+      const bar = document.getElementById('toastBar');
+      document.getElementById('toastText').textContent = msg;
+      bar.classList.add('show');
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => bar.classList.remove('show'), 2200);
+    }
+
+    function openModal(id) {
+      document.getElementById(id).classList.add('open');
+    }
+    function closeModal(id) {
+      document.getElementById(id).classList.remove('open');
+    }
+
+    function getCategoryIcon(catName) {
+      const found = [...EXPENSE_CATS, ...INCOME_CATS].find(c => c.name === catName);
+      if (found) return found.icon;
+      if (catName === '繳信用卡費') return '💳';
+      return '📌';
+    }
+
+    function loadState() {
+      try {
+        let raw = localStorage.getItem(STORAGE_KEY) || localStorage.getItem(LEGACY_KEY);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          state.transactions = Array.isArray(parsed.transactions) ? parsed.transactions : [];
+          state.accounts = Array.isArray(parsed.accounts) && parsed.accounts.length > 0 ? parsed.accounts : DEFAULT_ACCOUNTS;
+          state.presets = Array.isArray(parsed.presets) ? parsed.presets : DEFAULT_PRESETS;
+          state.recurring = Array.isArray(parsed.recurring) ? parsed.recurring : [];
+          state.gasUrl = parsed.gasUrl || DEFAULT_GAS_URL;
+          state.lastSyncAt = parsed.lastSyncAt || '';
+        } else {
+          state.accounts = DEFAULT_ACCOUNTS;
+          state.presets = DEFAULT_PRESETS;
+          state.gasUrl = DEFAULT_GAS_URL;
+        }
+      } catch (e) {
+        state.accounts = DEFAULT_ACCOUNTS;
+        state.presets = DEFAULT_PRESETS;
+        state.gasUrl = DEFAULT_GAS_URL;
+      }
+      if (state.accounts.length > 0 && !state.accounts.find(a => a.id === currentAccountId)) {
+        currentAccountId = state.accounts[0].id;
+      }
+      if (navigator.storage && navigator.storage.persist) {
+        navigator.storage.persist();
+      }
+    }
+
+    function saveState(triggerCloud = true) {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      renderAll();
+      if (triggerCloud && state.gasUrl) {
+        pushToGoogleSheet(true);
+      }
+    }
+
+    function todayISO() {
+      const d = new Date();
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    }
+
+    function formatMoney(num) {
+      const n = Number(num) || 0;
+      const sign = n < 0 ? '-' : '';
+      return sign + '$' + Math.abs(Math.round(n)).toLocaleString('en-US');
+    }
+
+    function getAccountById(id) {
+      return state.accounts.find(a => a.id === id) || state.accounts[0] || { id: 'acct_cash', name: '💵 現金', kind: 'cash', balance: 0 };
+    }
+
+    function applyAccountDelta(accountId, txType, amount, reverse = false) {
+      const acct = state.accounts.find(a => a.id === accountId);
+      if (!acct) return;
+      const sign = reverse ? -1 : 1;
+      const amt = (Number(amount) || 0) * sign;
+
+      if (acct.kind === 'credit') {
+        if (txType === 'expense') acct.balance = (Number(acct.balance) || 0) + amt;
+        else if (txType === 'income') acct.balance = (Number(acct.balance) || 0) - amt;
+      } else {
+        if (txType === 'expense') acct.balance = (Number(acct.balance) || 0) - amt;
+        else if (txType === 'income') acct.balance = (Number(acct.balance) || 0) + amt;
+      }
+      acct.updatedAt = new Date().toISOString();
+    }
+
+    function switchTab(tabId) {
+      document.querySelectorAll('.tab-page').forEach(el => el.classList.remove('active'));
+      const target = document.getElementById('tab-' + tabId);
+      if (target) target.classList.add('active');
+      document.querySelectorAll('.nav-item').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.tab === tabId);
+      });
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      renderAll();
+    }
+
+    function setEntryType(type) {
+      currentEntryType = type;
+      document.getElementById('modeExpenseBtn').classList.toggle('active', type === 'expense');
+      document.getElementById('modeIncomeBtn').classList.toggle('active', type === 'income');
+      document.getElementById('acctSelectorLabel').textContent =
+        type === 'expense' ? '付款帳戶（左右滑動切換）' : '入帳帳戶（收入自動加進餘額）';
+      const list = type === 'expense' ? EXPENSE_CATS : INCOME_CATS;
+      currentCategory = list[0].name;
+      renderCategoryGrid();
+      renderPresetStrip();
+    }
+
+    function clearAmountInput() {
+      const input = document.getElementById('entryAmountInput');
+      input.value = '';
+      input.focus();
+    }
+
+    // 常用品項 (Presets)
+    function renderPresetStrip() {
+      const strip = document.getElementById('presetStrip');
+      const list = state.presets.filter(p => (p.type || 'expense') === currentEntryType);
+      if (list.length === 0) {
+        strip.innerHTML = `<span style="font-size:12px;color:var(--muted);padding:6px 0;">點右上「＋新增品項」建立你的專屬常用品項</span>`;
+        return;
+      }
+      strip.innerHTML = list.map(p => `
+        <div class="preset-pill" onclick="usePreset('${p.id}')">
+          <span>${p.name}</span>
+          ${p.amount ? `<span class="preset-price">$${p.amount}</span>` : ''}
+          <span class="preset-del-x" onclick="event.stopPropagation();deletePreset('${p.id}')">✕</span>
+        </div>
+      `).join('');
+    }
+
+    function usePreset(presetId) {
+      const p = state.presets.find(x => x.id === presetId);
+      if (!p) return;
+      if (p.category) currentCategory = p.category;
+      if (p.accountId && state.accounts.some(a => a.id === p.accountId)) {
+        currentAccountId = p.accountId;
+      }
+      document.getElementById('entryNote').value = p.name;
+      const amtInput = document.getElementById('entryAmountInput');
+      if (p.amount && Number(p.amount) > 0) {
+        amtInput.value = p.amount;
+        showToast(`⚡ 已帶入「${p.name} $${p.amount}」，按「＋記一筆」完成`);
+      } else {
+        amtInput.value = '';
+        amtInput.focus();
+      }
+      renderCategoryGrid();
+      renderAccountSelector();
+    }
+
+    function openPresetModal() {
+      document.getElementById('newPresetName').value = '';
+      document.getElementById('newPresetAmount').value = '';
+      openModal('presetModal');
+      setTimeout(() => document.getElementById('newPresetName').focus(), 100);
+    }
+
+    function addNewPreset() {
+      const name = document.getElementById('newPresetName').value.trim();
+      const amount = Number(document.getElementById('newPresetAmount').value) || 0;
+      if (!name) return;
+
+      state.presets.push({
+        id: 'pre_' + Date.now(),
+        name,
+        type: currentEntryType,
+        category: currentCategory,
+        amount: amount > 0 ? amount : '',
+        accountId: currentAccountId
+      });
+
+      closeModal('presetModal');
+      saveState(true);
+      showToast(`✅ 已新增常用品項：${name}`);
+    }
+
+    function deletePreset(id) {
+      state.presets = state.presets.filter(p => p.id !== id);
+      saveState(true);
+    }
+
+    // 付款帳戶快選
+    function renderAccountSelector() {
+      const strip = document.getElementById('accountSelectorStrip');
+      strip.innerHTML = state.accounts.map(a => {
+        const isCredit = a.kind === 'credit';
+        const subText = isCredit ? `待繳 ${formatMoney(a.balance)}` : `餘額 ${formatMoney(a.balance)}`;
+        return `
+          <div class="acct-card ${a.id === currentAccountId ? 'selected' : ''}" onclick="selectAccount('${a.id}')">
+            <div class="acct-card-name">${a.name}</div>
+            <div class="acct-card-bal" style="${isCredit && a.balance > 0 ? 'color:var(--warn);font-weight:700;' : ''}">${subText}</div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function selectAccount(id) {
+      currentAccountId = id;
+      renderAccountSelector();
+    }
+
+    function renderCategoryGrid() {
+      const grid = document.getElementById('categoryGrid');
+      const list = currentEntryType === 'expense' ? EXPENSE_CATS : INCOME_CATS;
+      grid.innerHTML = list.map(c => `
+        <button class="cat-btn ${c.name === currentCategory ? 'selected' : ''}" onclick="selectCategory('${c.name}')">
+          <span class="cat-icon">${c.icon}</span>
+          <span class="cat-label">${c.name}</span>
+        </button>
+      `).join('');
+    }
+
+    function selectCategory(cat) {
+      currentCategory = cat;
+      renderCategoryGrid();
+    }
+
+    function submitQuickEntry() {
+      const input = document.getElementById('entryAmountInput');
+      const amt = Number(input.value);
+      if (!amt || amt <= 0) {
+        input.focus();
+        showToast('⚠️ 請先輸入金額');
+        return;
+      }
+      const dateVal = document.getElementById('entryDate').value || todayISO();
+      const noteVal = document.getElementById('entryNote').value.trim();
+
+      const tx = {
+        id: 'tx_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
+        date: dateVal,
+        type: currentEntryType,
+        category: currentCategory,
+        amount: amt,
+        accountId: currentAccountId,
+        toAccountId: '',
+        note: noteVal,
+        source: 'manual',
+        updatedAt: new Date().toISOString()
+      };
+
+      state.transactions.unshift(tx);
+      applyAccountDelta(currentAccountId, currentEntryType, amt, false);
+
+      input.value = '';
+      document.getElementById('entryNote').value = '';
+      input.blur();
+      saveState(true);
+      showToast(`✅ 已記帳：${currentCategory} ${formatMoney(amt)}`);
+    }
+
+    function deleteTransaction(id) {
+      const tx = state.transactions.find(t => t.id === id);
+      if (!tx) return;
+
+      if (tx.type === 'transfer') {
+        const fromAcct = state.accounts.find(a => a.id === tx.accountId);
+        const toCard = state.accounts.find(a => a.id === tx.toAccountId);
+        if (fromAcct) fromAcct.balance = (Number(fromAcct.balance) || 0) + Number(tx.amount);
+        if (toCard) toCard.balance = (Number(toCard.balance) || 0) + Number(tx.amount);
+      } else if (tx.accountId) {
+        applyAccountDelta(tx.accountId, tx.type, tx.amount, true);
+      }
+
+      state.transactions = state.transactions.filter(t => t.id !== id);
+      saveState(true);
+      showToast('🗑️ 已刪除並還原帳戶餘額');
+    }
+
+    // 底部抽屜：繳清信用卡費
+    function openPayCardModal(cardAccountId) {
+      const card = state.accounts.find(a => a.id === cardAccountId);
+      if (!card) return;
+      const due = Number(card.balance) || 0;
+      if (due <= 0) {
+        showToast(`🎉 ${card.name} 目前待繳為 $0`);
+        return;
+      }
+      activePayCardId = card.id;
+      document.getElementById('payCardTitle').textContent = `💳 繳清【${card.name}】`;
+      const cashAccounts = state.accounts.filter(a => a.kind !== 'credit');
+      document.getElementById('payFromAccountSelect').innerHTML = cashAccounts.map(a =>
+        `<option value="${a.id}">${a.name}（餘額 ${formatMoney(a.balance)}）</option>`
+      ).join('');
+      document.getElementById('payCardAmountInput').value = due;
+      openModal('payCardModal');
+    }
+
+    function confirmPayCreditCard() {
+      const card = state.accounts.find(a => a.id === activePayCardId);
+      const fromId = document.getElementById('payFromAccountSelect').value;
+      const fromAcct = state.accounts.find(a => a.id === fromId);
+      const payAmt = Number(document.getElementById('payCardAmountInput').value);
+
+      if (!card || !fromAcct || !payAmt || payAmt <= 0) return;
+
+      fromAcct.balance = (Number(fromAcct.balance) || 0) - payAmt;
+      card.balance = Math.max(0, (Number(card.balance) || 0) - payAmt);
+
+      state.transactions.unshift({
+        id: 'tx_pay_' + Date.now(),
+        date: todayISO(),
+        type: 'transfer',
+        category: '繳信用卡費',
+        amount: payAmt,
+        accountId: fromAcct.id,
+        toAccountId: card.id,
+        note: `${fromAcct.name} ➔ 繳清 ${card.name}`,
+        source: 'transfer',
+        updatedAt: new Date().toISOString()
+      });
+
+      closeModal('payCardModal');
+      saveState(true);
+      showToast(`✅ 已從 ${fromAcct.name} 扣款 ${formatMoney(payAmt)}`);
+    }
+
+    // 底部抽屜：新增或校準帳戶
+    function openAccountModal(accountId = '') {
+      const acct = state.accounts.find(a => a.id === accountId);
+      document.getElementById('editAccountId').value = acct ? acct.id : '';
+      document.getElementById('accountModalTitle').textContent = acct ? `校準【${acct.name}】` : '🏦 新增帳戶或信用卡';
+      document.getElementById('acctNameInput').value = acct ? acct.name : '';
+      document.getElementById('acctKindInput').value = acct ? acct.kind : 'cash';
+      document.getElementById('acctBalanceInput').value = acct ? acct.balance : '';
+      openModal('accountModal');
+    }
+
+    function upsertAccount() {
+      const editId = document.getElementById('editAccountId').value;
+      const name = document.getElementById('acctNameInput').value.trim();
+      const kind = document.getElementById('acctKindInput').value;
+      const balance = Number(document.getElementById('acctBalanceInput').value) || 0;
+      if (!name) return;
+
+      const existing = editId
+        ? state.accounts.find(a => a.id === editId)
+        : state.accounts.find(a => a.name === name);
+
+      if (existing) {
+        existing.name = name;
+        existing.kind = kind;
+        existing.balance = balance;
+        existing.updatedAt = new Date().toISOString();
+      } else {
+        state.accounts.push({
+          id: 'acct_' + Date.now(),
+          name,
+          kind,
+          balance,
+          updatedAt: new Date().toISOString()
+        });
+      }
+      closeModal('accountModal');
+      saveState(true);
+      showToast(`✅ 已儲存帳戶：${name}`);
+    }
+
+    function deleteAccount(id) {
+      if (state.accounts.length <= 1) {
+        showToast('⚠️ 至少需保留一個帳戶');
+        return;
+      }
+      state.accounts = state.accounts.filter(a => a.id !== id);
+      if (currentAccountId === id) currentAccountId = state.accounts[0].id;
+      saveState(true);
+    }
+
+    // 週期訂閱自動入帳引擎
+    function runRecurringEngine(manualNotice = false) {
+      const now = new Date();
+      const currentYM = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+      const todayDay = now.getDate();
+      let generatedCount = 0;
+
+      state.recurring.forEach(item => {
+        if (item.active === false) return;
+        const billDay = Number(item.BillingDay) || 1;
+        if (todayDay < billDay) return;
+
+        const m = now.getMonth() + 1;
+        let shouldTriggerThisMonth = false;
+        if (item.cycle === 'monthly') shouldTriggerThisMonth = true;
+        else if (item.cycle === 'quarterly') {
+          const startM = item.startDate ? (new Date(item.startDate).getMonth() + 1) : 1;
+          shouldTriggerThisMonth = ((m - startM + 12) % 3 === 0);
+        } else if (item.cycle === 'yearly') {
+          const startM = item.startDate ? (new Date(item.startDate).getMonth() + 1) : 1;
+          shouldTriggerThisMonth = (m === startM);
+        }
+
+        if (shouldTriggerThisMonth && item.lastGeneratedMonth !== currentYM) {
+          const txDate = `${currentYM}-${String(billDay).padStart(2, '0')}`;
+          const acctId = item.accountId || 'acct_card';
+          const amt = Number(item.amount) || 0;
+          const txType = item.type || 'expense';
+
+          state.transactions.unshift({
+            id: 'rec_tx_' + item.id + '_' + currentYM,
+            date: txDate,
+            type: txType,
+            category: item.category || '訂閱固定',
+            amount: amt,
+            accountId: acctId,
+            toAccountId: '',
+            note: `[自動週期] ${item.name}`,
+            source: 'recurring',
+            updatedAt: new Date().toISOString()
+          });
+
+          applyAccountDelta(acctId, txType, amt, false);
+          item.lastGeneratedMonth = currentYM;
+          item.updatedAt = new Date().toISOString();
+          generatedCount++;
+        }
+      });
+
+      if (generatedCount > 0) {
+        saveState(true);
+        showToast(`🔁 已自動入帳 ${generatedCount} 筆到期訂閱`);
+      } else if (manualNotice) {
+        showToast('✅ 本月到期週期項目皆已入帳');
+      }
+    }
+
+    function addRecurringItem() {
+      const name = document.getElementById('recName').value.trim();
+      const amount = Number(document.getElementById('recAmount').value);
+      const cycle = document.getElementById('recCycle').value;
+      const day = Math.min(28, Math.max(1, Number(document.getElementById('recDay').value) || 1));
+      const type = document.getElementById('recType').value;
+      const accountId = document.getElementById('recAccountSelect').value || 'acct_card';
+      const category = document.getElementById('recCategory').value.trim() || '訂閱固定';
+
+      if (!name || !amount || amount <= 0) {
+        showToast('⚠️ 請填寫訂閱名稱與金額');
+        return;
+      }
+
+      state.recurring.push({
+        id: 'rec_' + Date.now(),
+        name,
+        type,
+        category,
+        amount,
+        accountId,
+        cycle,
+        BillingDay: day,
+        startDate: todayISO(),
+        active: true,
+        lastGeneratedMonth: '',
+        updatedAt: new Date().toISOString()
+      });
+
+      document.getElementById('recName').value = '';
+      document.getElementById('recAmount').value = '';
+      runRecurringEngine(false);
+      saveState(true);
+      showToast(`✅ 已加入週期：${name}`);
+    }
+
+    function deleteRecurringItem(id) {
+      state.recurring = state.recurring.filter(r => r.id !== id);
+      saveState(true);
+    }
+
+    // 統計與互動日曆
+    function setStatsPeriod(p) {
+      statsPeriod = p;
+      document.getElementById('periodDayBtn').classList.toggle('active', p === 'day');
+      document.getElementById('periodMonthBtn').classList.toggle('active', p === 'month');
+      document.getElementById('periodQuarterBtn').classList.toggle('active', p === 'quarter');
+      document.getElementById('periodYearBtn').classList.toggle('active', p === 'year');
+      renderStats();
+    }
+
+    function shiftPeriod(delta) {
+      const d = new Date(statsCursorDate);
+      if (statsPeriod === 'day') d.setDate(d.getDate() + delta);
+      if (statsPeriod === 'month') d.setMonth(d.getMonth() + delta);
+      if (statsPeriod === 'quarter') d.setMonth(d.getMonth() + delta * 3);
+      if (statsPeriod === 'year') d.setFullYear(d.getFullYear() + delta);
+      statsCursorDate = d;
+      renderStats();
+    }
+
+    function isTxInPeriod(txDateStr, period, refDate) {
+      if (!txDateStr) return false;
+      const parts = String(txDateStr).slice(0, 10).split('-');
+      const y = Number(parts[0]);
+      const m = Number(parts[1]);
+      const day = Number(parts[2]);
+      const ry = refDate.getFullYear();
+      const rm = refDate.getMonth() + 1;
+      const rday = refDate.getDate();
+
+      if (period === 'day') return y === ry && m === rm && day === rday;
+      if (period === 'month') return y === ry && m === rm;
+      if (period === 'quarter') {
+        const q = Math.floor((m - 1) / 3) + 1;
+        const rq = Math.floor((rm - 1) / 3) + 1;
+        return y === ry && q === rq;
+      }
+      if (period === 'year') return y === ry;
+      return false;
+    }
+
+    function renderTxRowHtml(t) {
+      const acct = getAccountById(t.accountId);
+      const isCard = acct.kind === 'credit';
+      const isTransfer = t.type === 'transfer';
+      const icon = getCategoryIcon(t.category);
+      return `
+        <div class="tx-item">
+          <div class="tx-left">
+            <div class="tx-avatar">${icon}</div>
+            <div class="tx-info">
+              <div class="tx-title">
+                <span>${t.category}</span>
+                <span class="tag ${isCard ? 'tag-credit' : ''}">${acct.name}</span>
+                ${t.source === 'recurring' ? '<span class="tag">週期</span>' : ''}
+              </div>
+              <div class="tx-sub">${t.note ? t.note : String(t.date).slice(0, 10)}</div>
+            </div>
+          </div>
+          <div class="tx-right">
+            <span class="tx-amt ${isTransfer ? 'val-net' : (t.type === 'income' ? 'val-in' : 'val-out')}">
+              ${isTransfer ? '⇄ ' : (t.type === 'income' ? '+' : '-')}${formatMoney(t.amount)}
+            </span>
+            <button class="icon-del-btn" onclick="deleteTransaction('${t.id}')">✕</button>
+          </div>
+        </div>
+      `;
+    }
+
+    function renderStats() {
+      const y = statsCursorDate.getFullYear();
+      const m = statsCursorDate.getMonth() + 1;
+      const day = statsCursorDate.getDate();
+      const q = Math.floor((m - 1) / 3) + 1;
+
+      let label = `${y} 年 ${m} 月`;
+      if (statsPeriod === 'day') label = `${y}-${String(m).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+      if (statsPeriod === 'quarter') label = `${y} 年 Q${q}`;
+      if (statsPeriod === 'year') label = `${y} 全年度`;
+      document.getElementById('statsPeriodLabel').textContent = label;
+
+      const filtered = state.transactions.filter(t => isTxInPeriod(t.date, statsPeriod, statsCursorDate));
+      let totalIn = 0, totalOut = 0;
+      const expByCat = {}, expByAcct = {}, incByCat = {};
+
+      filtered.forEach(t => {
+        if (t.type === 'transfer') return;
+        const amt = Number(t.amount) || 0;
+        if (t.type === 'income') {
+          totalIn += amt;
+          incByCat[t.category] = (incByCat[t.category] || 0) + amt;
+        } else {
+          totalOut += amt;
+          expByCat[t.category] = (expByCat[t.category] || 0) + amt;
+          const acctName = getAccountById(t.accountId).name;
+          expByAcct[acctName] = (expByAcct[acctName] || 0) + amt;
+        }
+      });
+
+      const net = totalIn - totalOut;
+      const saveRate = totalIn > 0 ? Math.round((net / totalIn) * 100) : 0;
+
+      document.getElementById('statIn').textContent = formatMoney(totalIn);
+      document.getElementById('statOut').textContent = formatMoney(totalOut);
+      document.getElementById('statNet').textContent = `${formatMoney(net)} (${saveRate}%)`;
+      document.getElementById('statCatTotal').textContent = formatMoney(totalOut);
+
+      const expEntries = Object.entries(expByCat).sort((a, b) => b[1] - a[1]);
+      document.getElementById('categoryBreakdownList').innerHTML = expEntries.length === 0
+        ? `<div style="font-size:12px;color:var(--muted);">此區間尚無支出紀錄</div>`
+        : expEntries.map(([cat, amt]) => {
+            const pct = totalOut > 0 ? Math.round((amt / totalOut) * 100) : 0;
+            return `
+              <div class="stat-row">
+                <div class="stat-head">
+                  <span>${getCategoryIcon(cat)} ${cat} (${pct}%)</span>
+                  <strong>${formatMoney(amt)}</strong>
+                </div>
+                <div class="bar-bg"><div class="bar-fill" style="width:${pct}%;background:var(--expense);"></div></div>
+              </div>
+            `;
+          }).join('');
+
+      const acctEntries = Object.entries(expByAcct).sort((a, b) => b[1] - a[1]);
+      document.getElementById('accountBreakdownList').innerHTML = acctEntries.length === 0
+        ? `<div style="font-size:12px;color:var(--muted);">此區間尚無付款紀錄</div>`
+        : acctEntries.map(([name, amt]) => {
+            const pct = totalOut > 0 ? Math.round((amt / totalOut) * 100) : 0;
+            return `
+              <div class="stat-row">
+                <div class="stat-head">
+                  <span>${name} (${pct}%)</span>
+                  <strong>${formatMoney(amt)}</strong>
+                </div>
+                <div class="bar-bg"><div class="bar-fill" style="width:${pct}%;background:var(--warn);"></div></div>
+              </div>
+            `;
+          }).join('');
+
+      const incEntries = Object.entries(incByCat).sort((a, b) => b[1] - a[1]);
+      document.getElementById('incomeBreakdownList').innerHTML = incEntries.length === 0
+        ? `<div style="font-size:12px;color:var(--muted);">此區間尚無收入紀錄</div>`
+        : incEntries.map(([cat, amt]) => {
+            const pct = totalIn > 0 ? Math.round((amt / totalIn) * 100) : 0;
+            return `
+              <div class="stat-row">
+                <div class="stat-head">
+                  <span>${getCategoryIcon(cat)} ${cat} (${pct}%)</span>
+                  <strong>${formatMoney(amt)}</strong>
+                </div>
+                <div class="bar-bg"><div class="bar-fill" style="width:${pct}%;background:var(--income);"></div></div>
+              </div>
+            `;
+          }).join('');
+
+      renderCalendar();
+    }
+
+    function compactMoney(n) {
+      const val = Math.round(Number(n) || 0);
+      if (val >= 100000) return Math.round(val / 1000) + 'k';
+      return val.toLocaleString('en-US');
+    }
+
+    function selectCalendarDate(dateStr) {
+      const parts = dateStr.split('-');
+      statsCursorDate = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+      renderStats();
+    }
+
+    function jumpToTodayCalendar() {
+      statsCursorDate = new Date();
+      renderStats();
+    }
+
+    function quickAddForSelectedCalendarDate() {
+      const y = statsCursorDate.getFullYear();
+      const m = String(statsCursorDate.getMonth() + 1).padStart(2, '0');
+      const d = String(statsCursorDate.getDate()).padStart(2, '0');
+      document.getElementById('entryDate').value = `${y}-${m}-${d}`;
+      switchTab('entry');
+      setTimeout(() => document.getElementById('entryAmountInput').focus(), 120);
+    }
+
+    function renderCalendar() {
+      const y = statsCursorDate.getFullYear();
+      const m = statsCursorDate.getMonth();
+      const selDay = statsCursorDate.getDate();
+      const ymPrefix = `${y}-${String(m + 1).padStart(2, '0')}`;
+      const selectedDateStr = `${ymPrefix}-${String(selDay).padStart(2, '0')}`;
+      const todayStr = todayISO();
+
+      document.getElementById('calTitleLabel').textContent = `📅 ${y} 年 ${m + 1} 月 收支日曆`;
+
+      const dailyTotals = {};
+      state.transactions.forEach(t => {
+        if (!t.date || t.type === 'transfer') return;
+        const dStr = String(t.date).slice(0, 10);
+        if (!dStr.startsWith(ymPrefix)) return;
+        if (!dailyTotals[dStr]) dailyTotals[dStr] = { in: 0, out: 0 };
+        if (t.type === 'income') dailyTotals[dStr].in += Number(t.amount) || 0;
+        else dailyTotals[dStr].out += Number(t.amount) || 0;
+      });
+
+      const firstDayWeek = new Date(y, m, 1).getDay();
+      const daysInMonth = new Date(y, m + 1, 0).getDate();
+
+      const cells = [];
+      for (let i = 0; i < firstDayWeek; i++) cells.push(`<div class="cal-cell empty"></div>`);
+
+      for (let day = 1; day <= daysInMonth; day++) {
+        const dStr = `${ymPrefix}-${String(day).padStart(2, '0')}`;
+        const tot = dailyTotals[dStr] || { in: 0, out: 0 };
+        const isToday = dStr === todayStr;
+        const isSelected = dStr === selectedDateStr;
+
+        cells.push(`
+          <div class="cal-cell ${isToday ? 'today' : ''} ${isSelected ? 'selected' : ''}" onclick="selectCalendarDate('${dStr}')">
+            <span class="cal-day-num">${day}</span>
+            <div class="cal-amounts">
+              ${tot.in > 0 ? `<span class="val-in">+${compactMoney(tot.in)}</span>` : ''}
+              ${tot.out > 0 ? `<span class="val-out">-${compactMoney(tot.out)}</span>` : ''}
+            </div>
+          </div>
+        `);
+      }
+
+      document.getElementById('calendarGrid').innerHTML = cells.join('');
+
+      const dayTxs = state.transactions.filter(t => String(t.date).slice(0, 10) === selectedDateStr);
+      let dIn = 0, dOut = 0;
+      dayTxs.forEach(t => {
+        if (t.type === 'transfer') return;
+        if (t.type === 'income') dIn += Number(t.amount) || 0;
+        else dOut += Number(t.amount) || 0;
+      });
+
+      document.getElementById('calSelectedDateTitle').textContent = `📆 ${selectedDateStr} (${dayTxs.length} 筆)`;
+      document.getElementById('calDayIn').textContent = `+${formatMoney(dIn)}`;
+      document.getElementById('calDayOut').textContent = `-${formatMoney(dOut)}`;
+      document.getElementById('calDayNet').textContent = `淨 ${formatMoney(dIn - dOut)}`;
+
+      const listEl = document.getElementById('calSelectedDayTxList');
+      listEl.innerHTML = dayTxs.length === 0
+        ? `<div style="font-size:12px;color:var(--muted);text-align:center;padding:10px 0;">這天沒有任何收支紀錄（零消費日 🎉）</div>`
+        : dayTxs.map(t => renderTxRowHtml(t)).join('');
+    }
+
+    function renderAll() {
+      const now = new Date();
+      const monthTx = state.transactions.filter(t => isTxInPeriod(t.date, 'month', now));
+      let mIn = 0, mOut = 0;
+      monthTx.forEach(t => {
+        if (t.type === 'transfer') return;
+        if (t.type === 'income') mIn += Number(t.amount) || 0;
+        else mOut += Number(t.amount) || 0;
+      });
+
+      const cashTotal = state.accounts.filter(a => a.kind !== 'credit').reduce((s, a) => s + (Number(a.balance) || 0), 0);
+      const creditDueTotal = state.accounts.filter(a => a.kind === 'credit').reduce((s, a) => s + (Number(a.balance) || 0), 0);
+
+      document.getElementById('heroIncome').textContent = formatMoney(mIn);
+      document.getElementById('heroExpense').textContent = formatMoney(mOut);
+      document.getElementById('heroNet').textContent = formatMoney(mIn - mOut);
+      document.getElementById('heroCreditDue').textContent = formatMoney(creditDueTotal);
+
+      renderPresetStrip();
+      renderAccountSelector();
+      renderCategoryGrid();
+
+      const selDate = document.getElementById('entryDate').value || todayISO();
+      let dIn = 0, dOut = 0;
+      state.transactions.forEach(t => {
+        if (String(t.date).slice(0, 10) !== selDate || t.type === 'transfer') return;
+        if (t.type === 'income') dIn += Number(t.amount) || 0;
+        else dOut += Number(t.amount) || 0;
+      });
+      document.getElementById('selectedDayLabel').textContent = `📅 ${selDate === todayISO() ? '今日' : selDate} 金流`;
+      document.getElementById('selectedDayIn').textContent = `+${formatMoney(dIn)}`;
+      document.getElementById('selectedDayOut').textContent = `-${formatMoney(dOut)}`;
+      document.getElementById('selectedDayNet').textContent = `淨 ${formatMoney(dIn - dOut)}`;
+
+      // 按日分組明細
+      const sortedTx = [...state.transactions].sort((a, b) => String(b.date).localeCompare(String(a.date)));
+      document.getElementById('recentCountLabel').textContent = `共 ${sortedTx.length} 筆`;
+      const recentEl = document.getElementById('recentTxList');
+      if (sortedTx.length === 0) {
+        recentEl.innerHTML = `<div style="font-size:13px;color:var(--muted);text-align:center;padding:16px 0;">尚無紀錄，點上方常用品項或輸入金額開始記帳！</div>`;
+      } else {
+        const sliced = sortedTx.slice(0, 40);
+        const dayMap = {};
+        sliced.forEach(t => {
+          const dKey = String(t.date).slice(0, 10);
+          if (!dayMap[dKey]) dayMap[dKey] = { in: 0, out: 0, items: [] };
+          if (t.type !== 'transfer') {
+            if (t.type === 'income') dayMap[dKey].in += Number(t.amount) || 0;
+            else dayMap[dKey].out += Number(t.amount) || 0;
+          }
+          dayMap[dKey].items.push(t);
+        });
+
+        recentEl.innerHTML = Object.entries(dayMap).map(([dKey, group]) => {
+          const dayNet = group.in - group.out;
+          return `
+            <div class="day-group-header">
+              <span>📆 ${dKey} ${dKey === todayISO() ? '(今天)' : ''}</span>
+              <span>
+                ${group.in > 0 ? `<span class="val-in">+${formatMoney(group.in)}</span> · ` : ''}
+                <span class="val-out">-${formatMoney(group.out)}</span> ·
+                <span class="val-net">淨 ${formatMoney(dayNet)}</span>
+              </span>
+            </div>
+            ${group.items.map(t => renderTxRowHtml(t)).join('')}
+          `;
+        }).join('');
+      }
+
+      // 週期訂閱
+      const recSelect = document.getElementById('recAccountSelect');
+      if (recSelect) {
+        recSelect.innerHTML = state.accounts.map(a => `<option value="${a.id}">${a.name}</option>`).join('');
+      }
+      let monthlyEq = 0;
+      state.recurring.forEach(r => {
+        if (r.type === 'income') return;
+        const amt = Number(r.amount) || 0;
+        if (r.cycle === 'monthly') monthlyEq += amt;
+        else if (r.cycle === 'quarterly') monthlyEq += amt / 3;
+        else if (r.cycle === 'yearly') monthlyEq += amt / 12;
+      });
+      document.getElementById('recMonthlyTotal').textContent = `${formatMoney(monthlyEq)} / 月`;
+      document.getElementById('recYearlyTotal').textContent = `${formatMoney(monthlyEq * 12)} / 年`;
+      document.getElementById('recCountLabel').textContent = `${state.recurring.length} 項`;
+
+      const cycleMap = { monthly: '每月', quarterly: '每季', yearly: '每年' };
+      const recEl = document.getElementById('recurringList');
+      recEl.innerHTML = state.recurring.length === 0
+        ? `<div style="font-size:12px;color:var(--muted);">尚未設定固定訂閱或週期支出</div>`
+        : state.recurring.map(r => {
+            const acct = getAccountById(r.accountId);
+            return `
+              <div class="tx-item">
+                <div class="tx-left">
+                  <div class="tx-avatar">🔁</div>
+                  <div class="tx-info">
+                    <div class="tx-title">
+                      <span>${r.name}</span>
+                      <span class="tag">${cycleMap[r.cycle] || r.cycle} ${r.BillingDay}號</span>
+                      <span class="tag ${acct.kind === 'credit' ? 'tag-credit' : ''}">${acct.name}</span>
+                    </div>
+                    <div class="tx-sub">${r.category} · 上次入帳: ${r.lastGeneratedMonth || '尚未觸發'}</div>
+                  </div>
+                </div>
+                <div class="tx-right">
+                  <span class="tx-amt ${r.type === 'income' ? 'val-in' : 'val-out'}">${formatMoney(r.amount)}</span>
+                  <button class="icon-del-btn" onclick="deleteRecurringItem('${r.id}')">✕</button>
+                </div>
+              </div>
+            `;
+          }).join('');
+
+      // 帳戶與信用卡管理
+      document.getElementById('totalCashBankVal').textContent = formatMoney(cashTotal);
+      document.getElementById('totalCreditDebtVal').textContent = formatMoney(creditDueTotal);
+      document.getElementById('totalTrueNetWorth').textContent = formatMoney(cashTotal - creditDueTotal);
+
+      const cashAccounts = state.accounts.filter(a => a.kind !== 'credit');
+      const creditAccounts = state.accounts.filter(a => a.kind === 'credit');
+
+      document.getElementById('cashAccountList').innerHTML = cashAccounts.map(a => `
+        <div class="tx-item">
+          <div class="tx-left">
+            <div class="tx-avatar">${a.kind === 'invest' ? '📈' : '🏦'}</div>
+            <div class="tx-info">
+              <div class="tx-title">${a.name}</div>
+              <div class="tx-sub">支出時直接扣減此餘額</div>
+            </div>
+          </div>
+          <div class="tx-right">
+            <span class="tx-amt val-in">${formatMoney(a.balance)}</span>
+            <button class="btn-pill" onclick="openAccountModal('${a.id}')">校準</button>
+            <button class="icon-del-btn" onclick="deleteAccount('${a.id}')">✕</button>
+          </div>
+        </div>
+      `).join('');
+
+      document.getElementById('creditAccountList').innerHTML = creditAccounts.length === 0
+        ? `<div style="font-size:12px;color:var(--muted);">尚未新增信用卡</div>`
+        : creditAccounts.map(a => `
+          <div class="tx-item">
+            <div class="tx-left">
+              <div class="tx-avatar">💳</div>
+              <div class="tx-info">
+                <div class="tx-title">${a.name}</div>
+                <div class="tx-sub">待繳 ${formatMoney(a.balance)}</div>
+              </div>
+            </div>
+            <div class="tx-right">
+              <button class="btn-pill" style="background:var(--warn-soft);color:var(--warn);border-color:rgba(245,158,11,0.4);" onclick="openPayCardModal('${a.id}')">繳卡費</button>
+              <button class="btn-pill" onclick="openAccountModal('${a.id}')">校準</button>
+              <button class="icon-del-btn" onclick="deleteAccount('${a.id}')">✕</button>
+            </div>
+          </div>
+        `).join('');
+
+      // 雲端狀態
+      const badge = document.getElementById('syncStatusBtn');
+      const urlInput = document.getElementById('gasUrlInput');
+      if (urlInput && document.activeElement !== urlInput) urlInput.value = state.gasUrl || '';
+      if (!state.gasUrl) {
+        badge.textContent = '☁️ 未連結 Sheet';
+        badge.className = 'cloud-pill';
+      } else {
+        badge.textContent = '☁️ 已連結 Sheet';
+        badge.className = 'cloud-pill ok';
+      }
+
+      renderStats();
+    }
+
+    // Google Sheet 雙向同步
+    async function saveGasUrlAndPush() {
+      const url = document.getElementById('gasUrlInput').value.trim();
+      state.gasUrl = url;
+      saveState(false);
+      if (url) await pushToGoogleSheet(false);
+    }
+
+    async function pushToGoogleSheet(silent = false) {
+      if (!state.gasUrl) return;
+      const badge = document.getElementById('syncStatusBtn');
+      const logEl = document.getElementById('syncLogText');
+      badge.textContent = '⏳ 同步中...';
+      badge.className = 'cloud-pill syncing';
+
+      try {
+        const res = await fetch(state.gasUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+          body: JSON.stringify({
+            transactions: state.transactions,
+            accounts: state.accounts,
+            presets: state.presets,
+            recurring: state.recurring
+          })
+        });
+        const data = await res.json();
+        if (data && data.ok) {
+          state.lastSyncAt = data.syncedAt;
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+          badge.textContent = '☁️ 已同步';
+          badge.className = 'cloud-pill ok';
+          if (logEl) logEl.textContent = `最後同步成功：${new Date().toLocaleTimeString()}`;
+          if (!silent) showToast('☁️ 已成功同步至 Google Sheet！');
+        } else {
+          throw new Error((data && data.error) || '回傳格式錯誤');
+        }
+      } catch (err) {
+        badge.textContent = '⚠️ 同步失敗';
+        badge.className = 'cloud-pill err';
+        if (logEl) logEl.textContent = `同步失敗：${err.message}`;
+        if (!silent) showToast('⚠️ 同步失敗，請檢查 GAS 網址權限');
+      }
+    }
+
+    async function pullFromGoogleSheet() {
+      const url = document.getElementById('gasUrlInput').value.trim() || state.gasUrl;
+      if (!url) {
+        showToast('⚠️ 請先貼上 Google Sheet Web App 網址');
+        return;
+      }
+      state.gasUrl = url;
+      const badge = document.getElementById('syncStatusBtn');
+      badge.textContent = '⏳ 讀取中...';
+      badge.className = 'cloud-pill syncing';
+
+      try {
+        const res = await fetch(url, { method: 'GET' });
+        const data = await res.json();
+        if (data && data.ok) {
+          state.transactions = Array.isArray(data.transactions) ? data.transactions : [];
+          if (Array.isArray(data.accounts) && data.accounts.length > 0) state.accounts = data.accounts;
+          if (Array.isArray(data.presets) && data.presets.length > 0) state.presets = data.presets;
+          state.recurring = Array.isArray(data.recurring) ? data.recurring : [];
+          saveState(false);
+          badge.textContent = '☁️ 已同步';
+          badge.className = 'cloud-pill ok';
+          showToast(`☁️ 已拉回 ${state.transactions.length} 筆收支與帳戶設定`);
+        } else {
+          throw new Error((data && data.error) || '讀取失敗');
+        }
+      } catch (err) {
+        badge.textContent = '⚠️ 讀取失敗';
+        badge.className = 'cloud-pill err';
+        showToast('⚠️ 從 Sheet 拉回失敗');
+      }
+    }
+
+    function exportCSV() {
+      const headers = ['日期', '類型', '類別', '付款/入帳帳戶', '金額', '備註', '來源'];
+      const rows = state.transactions.map(t => [
+        t.date,
+        t.type === 'income' ? '收入' : (t.type === 'transfer' ? '繳卡費/轉帳' : '支出'),
+        t.category,
+        getAccountById(t.accountId).name,
+        t.amount,
+        `"${String(t.note || '').replace(/"/g, '""')}"`,
+        t.source || 'manual'
+      ]);
+      const csv = '\uFEFF' + [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `精簡記帳_${todayISO()}.csv`;
+      a.click();
+    }
+
+    function exportJSON() {
+      const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `精簡記帳備份_${todayISO()}.json`;
+      a.click();
+    }
+
+    window.addEventListener('DOMContentLoaded', () => {
+      document.getElementById('entryDate').value = todayISO();
+      loadState();
+      runRecurringEngine(false);
+      renderAll();
+    });
+  </script>
+</body>
+</html>
