@@ -2128,10 +2128,10 @@
       }
     }
 
-    async function pullFromGoogleSheet() {
+    async function pullFromGoogleSheet(silent = false) {
       const url = document.getElementById('gasUrlInput').value.trim() || state.gasUrl;
       if (!url) {
-        showToast('⚠️ 請先貼上 Google Sheet Web App 網址');
+        if (!silent) showToast('⚠️ 請先貼上 Google Sheet Web App 網址');
         return;
       }
       state.gasUrl = url;
@@ -2140,9 +2140,14 @@
       badge.className = 'cloud-pill syncing';
 
       try {
-        const res = await fetch(url, { method: 'GET' });
+        const res = await fetch(url, { method: 'GET', redirect: 'follow' });
         const data = await res.json();
         if (data && data.ok) {
+          if (silent && state.transactions.length > 0 && (!data.transactions || data.transactions.length === 0)) {
+            // 若雲端還是空的但本地有資料，反過來自動把本地推上雲端
+            await pushToGoogleSheet(true);
+            return;
+          }
           state.transactions = Array.isArray(data.transactions) ? data.transactions : [];
           if (Array.isArray(data.accounts) && data.accounts.length > 0) state.accounts = data.accounts;
           if (Array.isArray(data.presets) && data.presets.length > 0) state.presets = data.presets;
@@ -2150,14 +2155,14 @@
           saveState(false);
           badge.textContent = '☁️ 已同步';
           badge.className = 'cloud-pill ok';
-          showToast(`☁️ 已拉回 ${state.transactions.length} 筆收支與帳戶設定`);
+          if (!silent) showToast(`☁️ 已拉回 ${state.transactions.length} 筆收支與帳戶設定`);
         } else {
           throw new Error((data && data.error) || '讀取失敗');
         }
       } catch (err) {
-        badge.textContent = '⚠️ 讀取失敗';
+        badge.textContent = '⚠️ 需完成首次授權';
         badge.className = 'cloud-pill err';
-        showToast('⚠️ 從 Sheet 拉回失敗');
+        if (!silent) showToast('⚠️ 尚未完成 GAS 首次「所有人」部署授權');
       }
     }
 
@@ -2193,6 +2198,9 @@
       loadState();
       runRecurringEngine(false);
       renderAll();
+      if (state.gasUrl) {
+        pullFromGoogleSheet(true);
+      }
     });
   </script>
 </body>
