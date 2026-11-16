@@ -277,6 +277,9 @@
       gap: 6px;
       cursor: pointer;
       min-height: 38px;
+      user-select: none;
+      -webkit-user-select: none;
+      -webkit-touch-callout: none;
     }
     .preset-pill:active { transform: scale(0.96); background: var(--surface-3); }
     .preset-price {
@@ -509,6 +512,9 @@
       align-items: center;
       gap: 10px;
       min-width: 0;
+      user-select: none;
+      -webkit-user-select: none;
+      -webkit-touch-callout: none;
     }
     .tx-avatar {
       width: 38px;
@@ -790,9 +796,9 @@
           <button id="modeIncomeBtn" class="seg-btn income-mode" onclick="setEntryType('income')">收入 (+)</button>
         </div>
 
-        <!-- 1. 常用品項快選（點一下有金額直接入帳，或帶入表單） -->
+        <!-- 1. 常用品項快選（點一下帶入，長按或點✎修改） -->
         <div class="section-row">
-          <span class="section-label">⚡ 常用品項（點一下閃電帶入/入帳）</span>
+          <span class="section-label">⚡ 常用品項（點一下帶入 · 長按修改）</span>
           <button class="btn-pill" onclick="openPresetModal()">＋ 新增品項</button>
         </div>
         <div class="preset-strip no-scrollbar" id="presetStrip"></div>
@@ -1074,22 +1080,30 @@
 
   <!-- ==================== 手機底部抽屜 (Bottom Sheet Modals) ==================== -->
 
-  <!-- 1. 新增常用品項抽屜 -->
+  <!-- 1. 新增 / 修改常用品項抽屜 -->
   <div id="presetModal" class="sheet-backdrop" onclick="if(event.target===this)closeModal('presetModal')">
     <div class="bottom-sheet">
       <div class="sheet-handle"></div>
       <div class="sheet-title">
-        <span>⚡ 新增常用品項快捷鍵</span>
+        <span id="presetModalTitle">⚡ 新增常用品項快捷鍵</span>
         <button class="clear-amt-btn" onclick="closeModal('presetModal')">✕</button>
       </div>
+      <input type="hidden" id="editPresetId" value="" />
       <div class="form-row">
         <input type="text" id="newPresetName" class="input" placeholder="品項名稱（例：拿鐵、便當）" />
         <input type="number" inputmode="decimal" id="newPresetAmount" class="input" placeholder="固定金額（可留空）" />
       </div>
-      <p style="font-size:12px;color:var(--muted);margin:4px 0 12px;">
-        💡 將自動綁定目前選取的「類別」與「付款帳戶」。若填寫固定金額，點一下常用品項即可直接帶入！
+      <div class="form-row" style="margin-bottom:10px;">
+        <select id="newPresetCategory"></select>
+        <select id="newPresetAccount"></select>
+      </div>
+      <p style="font-size:12px;color:var(--muted);margin:0 0 12px;">
+        💡 若填寫固定金額，點一下常用品項即可帶入；長按品項或點 ✎ 可隨時修改金額、類別或帳戶。
       </p>
-      <button class="primary-cta" onclick="addNewPreset()">儲存常用品項</button>
+      <div style="display:flex;gap:8px;">
+        <button id="deletePresetModalBtn" class="btn-secondary" style="display:none;flex:0 0 92px;color:var(--expense);border-color:rgba(244,63,94,0.35);" onclick="deletePresetFromModal()">刪除</button>
+        <button class="primary-cta" onclick="savePresetModal()">儲存常用品項</button>
+      </div>
     </div>
   </div>
 
@@ -1129,6 +1143,57 @@
       <div style="font-size:12px;color:var(--muted);margin-bottom:6px;">目前實際餘額（信用卡請填目前已刷未繳金額）：</div>
       <input type="number" inputmode="decimal" id="acctBalanceInput" class="input" placeholder="0" style="margin-bottom:14px;" />
       <button class="primary-cta" onclick="upsertAccount()">儲存帳戶設定</button>
+    </div>
+  </div>
+
+  <!-- 4. 修改收支明細抽屜 -->
+  <div id="txEditModal" class="sheet-backdrop" onclick="if(event.target===this)closeModal('txEditModal')">
+    <div class="bottom-sheet">
+      <div class="sheet-handle"></div>
+      <div class="sheet-title">
+        <span>✏️ 修改收支明細</span>
+        <button class="clear-amt-btn" onclick="closeModal('txEditModal')">✕</button>
+      </div>
+      <input type="hidden" id="editTxId" value="" />
+      <div class="form-row">
+        <input type="date" id="editTxDate" class="input" />
+        <input type="number" inputmode="decimal" id="editTxAmount" class="input" placeholder="金額" />
+      </div>
+      <div class="form-row">
+        <select id="editTxCategory"></select>
+        <select id="editTxAccount"></select>
+      </div>
+      <input type="text" id="editTxNote" class="input" placeholder="備註品項" style="margin-bottom:14px;" />
+      <button class="primary-cta" onclick="saveEditedTransaction()">儲存修改（自動重算餘額）</button>
+    </div>
+  </div>
+
+  <!-- 5. 修改週期訂閱抽屜 -->
+  <div id="recEditModal" class="sheet-backdrop" onclick="if(event.target===this)closeModal('recEditModal')">
+    <div class="bottom-sheet">
+      <div class="sheet-handle"></div>
+      <div class="sheet-title">
+        <span>🔁 修改週期訂閱項目</span>
+        <button class="clear-amt-btn" onclick="closeModal('recEditModal')">✕</button>
+      </div>
+      <input type="hidden" id="editRecId" value="" />
+      <div class="form-row">
+        <input type="text" id="editRecName" class="input" placeholder="名稱" />
+        <input type="number" inputmode="decimal" id="editRecAmount" class="input" placeholder="金額" />
+      </div>
+      <div class="form-row">
+        <select id="editRecCycle">
+          <option value="monthly">每月固定</option>
+          <option value="quarterly">每季 (每3個月)</option>
+          <option value="yearly">每年固定</option>
+        </select>
+        <input type="number" inputmode="numeric" id="editRecDay" class="input" min="1" max="28" placeholder="扣款日(1-28)" />
+      </div>
+      <div class="form-row" style="margin-bottom:14px;">
+        <select id="editRecAccount"></select>
+        <input type="text" id="editRecCategory" class="input" placeholder="歸屬類別" />
+      </div>
+      <button class="primary-cta" onclick="saveEditedRecurring()">儲存週期修改</button>
     </div>
   </div>
 
@@ -1310,6 +1375,41 @@
       input.focus();
     }
 
+    // 長按手勢判斷 (450ms 觸發編輯，同時支援桌面右鍵與點擊✎按鈕)
+    let lpTimer = null;
+    let lpFired = false;
+    function startLongPress(fn) {
+      lpFired = false;
+      clearTimeout(lpTimer);
+      lpTimer = setTimeout(() => {
+        lpFired = true;
+        if (navigator.vibrate) navigator.vibrate(20);
+        fn();
+        setTimeout(() => { lpFired = false; }, 450);
+      }, 450);
+    }
+    function cancelLongPress() {
+      clearTimeout(lpTimer);
+    }
+
+    function fillCategorySelect(selectEl, txType, selectedCat) {
+      const list = txType === 'income' ? INCOME_CATS : EXPENSE_CATS;
+      const names = list.map(c => c.name);
+      let opts = list.map(c => `<option value="${c.name}">${c.icon} ${c.name}</option>`).join('');
+      if (selectedCat && !names.includes(selectedCat)) {
+        opts += `<option value="${selectedCat}">${getCategoryIcon(selectedCat)} ${selectedCat}</option>`;
+      }
+      selectEl.innerHTML = opts;
+      if (selectedCat) selectEl.value = selectedCat;
+    }
+
+    function fillAccountSelect(selectEl, selectedAcctId) {
+      selectEl.innerHTML = state.accounts.map(a => `<option value="${a.id}">${a.name}</option>`).join('');
+      if (selectedAcctId && state.accounts.some(a => a.id === selectedAcctId)) {
+        selectEl.value = selectedAcctId;
+      }
+    }
+
     // 常用品項 (Presets)
     function renderPresetStrip() {
       const strip = document.getElementById('presetStrip');
@@ -1319,15 +1419,25 @@
         return;
       }
       strip.innerHTML = list.map(p => `
-        <div class="preset-pill" onclick="usePreset('${p.id}')">
+        <div class="preset-pill"
+          onclick="usePreset('${p.id}')"
+          ontouchstart="startLongPress(()=>openPresetModal('${p.id}'))"
+          ontouchend="cancelLongPress()"
+          ontouchmove="cancelLongPress()"
+          oncontextmenu="event.preventDefault();openPresetModal('${p.id}')">
           <span>${p.name}</span>
           ${p.amount ? `<span class="preset-price">$${p.amount}</span>` : ''}
-          <span class="preset-del-x" onclick="event.stopPropagation();deletePreset('${p.id}')">✕</span>
+          <span class="preset-del-x" onclick="event.stopPropagation();openPresetModal('${p.id}')" title="修改">✎</span>
+          <span class="preset-del-x" onclick="event.stopPropagation();deletePreset('${p.id}')" title="刪除">✕</span>
         </div>
       `).join('');
     }
 
     function usePreset(presetId) {
+      if (lpFired) {
+        lpFired = false;
+        return;
+      }
       const p = state.presets.find(x => x.id === presetId);
       if (!p) return;
       if (p.category) currentCategory = p.category;
@@ -1347,30 +1457,68 @@
       renderAccountSelector();
     }
 
-    function openPresetModal() {
-      document.getElementById('newPresetName').value = '';
-      document.getElementById('newPresetAmount').value = '';
+    function openPresetModal(presetId = '') {
+      const p = presetId ? state.presets.find(x => x.id === presetId) : null;
+      const txType = p ? (p.type || 'expense') : currentEntryType;
+      const catSelect = document.getElementById('newPresetCategory');
+      const acctSelect = document.getElementById('newPresetAccount');
+      const delBtn = document.getElementById('deletePresetModalBtn');
+
+      document.getElementById('editPresetId').value = p ? p.id : '';
+      document.getElementById('presetModalTitle').textContent = p ? '⚡ 修改常用品項' : '⚡ 新增常用品項快捷鍵';
+      document.getElementById('newPresetName').value = p ? p.name : '';
+      document.getElementById('newPresetAmount').value = (p && p.amount) ? p.amount : '';
+
+      fillCategorySelect(catSelect, txType, p ? (p.category || currentCategory) : currentCategory);
+      fillAccountSelect(acctSelect, p ? (p.accountId || currentAccountId) : currentAccountId);
+
+      delBtn.style.display = p ? 'block' : 'none';
       openModal('presetModal');
-      setTimeout(() => document.getElementById('newPresetName').focus(), 100);
+      setTimeout(() => document.getElementById(p ? 'newPresetAmount' : 'newPresetName').focus(), 100);
     }
 
-    function addNewPreset() {
+    function savePresetModal() {
+      const editId = document.getElementById('editPresetId').value;
       const name = document.getElementById('newPresetName').value.trim();
-      const amount = Number(document.getElementById('newPresetAmount').value) || 0;
-      if (!name) return;
+      const amountVal = document.getElementById('newPresetAmount').value.trim();
+      const amount = Number(amountVal) || 0;
+      const category = document.getElementById('newPresetCategory').value || currentCategory;
+      const accountId = document.getElementById('newPresetAccount').value || currentAccountId;
+      if (!name) {
+        showToast('⚠️ 請輸入品項名稱');
+        return;
+      }
 
-      state.presets.push({
-        id: 'pre_' + Date.now(),
-        name,
-        type: currentEntryType,
-        category: currentCategory,
-        amount: amount > 0 ? amount : '',
-        accountId: currentAccountId
-      });
+      if (editId) {
+        const existing = state.presets.find(x => x.id === editId);
+        if (existing) {
+          existing.name = name;
+          existing.amount = amount > 0 ? amount : '';
+          existing.category = category;
+          existing.accountId = accountId;
+        }
+      } else {
+        state.presets.push({
+          id: 'pre_' + Date.now(),
+          name,
+          type: currentEntryType,
+          category,
+          amount: amount > 0 ? amount : '',
+          accountId
+        });
+      }
 
       closeModal('presetModal');
       saveState(true);
-      showToast(`✅ 已新增常用品項：${name}`);
+      showToast(editId ? `✅ 已更新常用品項：${name}` : `✅ 已新增常用品項：${name}`);
+    }
+
+    function deletePresetFromModal() {
+      const editId = document.getElementById('editPresetId').value;
+      if (!editId) return;
+      deletePreset(editId);
+      closeModal('presetModal');
+      showToast('🗑️ 已刪除常用品項');
     }
 
     function deletePreset(id) {
@@ -1464,6 +1612,111 @@
       state.transactions = state.transactions.filter(t => t.id !== id);
       saveState(true);
       showToast('🗑️ 已刪除並還原帳戶餘額');
+    }
+
+    // 底部抽屜：修改已記帳收支明細（先沖銷舊帳戶餘額，再套用新帳戶與金額）
+    function openTxEditModal(txId) {
+      const tx = state.transactions.find(t => t.id === txId);
+      if (!tx) return;
+      if (tx.type === 'transfer') {
+        showToast('💡 繳卡費紀錄請直接刪除後重按繳卡費');
+        return;
+      }
+
+      document.getElementById('editTxId').value = tx.id;
+      document.getElementById('editTxDate').value = String(tx.date || todayISO()).slice(0, 10);
+      document.getElementById('editTxAmount').value = tx.amount;
+      document.getElementById('editTxNote').value = tx.note || '';
+
+      fillCategorySelect(document.getElementById('editTxCategory'), tx.type, tx.category);
+      fillAccountSelect(document.getElementById('editTxAccount'), tx.accountId);
+
+      openModal('txEditModal');
+      setTimeout(() => document.getElementById('editTxAmount').focus(), 100);
+    }
+
+    function saveEditedTransaction() {
+      const txId = document.getElementById('editTxId').value;
+      const tx = state.transactions.find(t => t.id === txId);
+      if (!tx) return;
+
+      const newAmt = Number(document.getElementById('editTxAmount').value);
+      if (!newAmt || newAmt <= 0) {
+        showToast('⚠️ 請輸入有效金額');
+        return;
+      }
+
+      const newDate = document.getElementById('editTxDate').value || todayISO();
+      const newCategory = document.getElementById('editTxCategory').value || tx.category;
+      const newAccountId = document.getElementById('editTxAccount').value || tx.accountId;
+      const newNote = document.getElementById('editTxNote').value.trim();
+
+      // 1. 先沖銷舊的帳戶餘額變動
+      if (tx.accountId) {
+        applyAccountDelta(tx.accountId, tx.type, tx.amount, true);
+      }
+
+      // 2. 更新交易欄位
+      tx.date = newDate;
+      tx.amount = newAmt;
+      tx.category = newCategory;
+      tx.accountId = newAccountId;
+      tx.note = newNote;
+      tx.updatedAt = new Date().toISOString();
+
+      // 3. 套用新的帳戶餘額變動
+      applyAccountDelta(tx.accountId, tx.type, tx.amount, false);
+
+      closeModal('txEditModal');
+      saveState(true);
+      showToast('✅ 已修改收支並同步更新帳戶餘額');
+    }
+
+    // 底部抽屜：修改週期訂閱項目
+    function openRecEditModal(recId) {
+      const r = state.recurring.find(x => x.id === recId);
+      if (!r) return;
+
+      document.getElementById('editRecId').value = r.id;
+      document.getElementById('editRecName').value = r.name || '';
+      document.getElementById('editRecAmount').value = r.amount || '';
+      document.getElementById('editRecCycle').value = r.cycle || 'monthly';
+      document.getElementById('editRecDay').value = r.BillingDay || 1;
+      document.getElementById('editRecCategory').value = r.category || '訂閱固定';
+      fillAccountSelect(document.getElementById('editRecAccount'), r.accountId);
+
+      openModal('recEditModal');
+      setTimeout(() => document.getElementById('editRecAmount').focus(), 100);
+    }
+
+    function saveEditedRecurring() {
+      const recId = document.getElementById('editRecId').value;
+      const r = state.recurring.find(x => x.id === recId);
+      if (!r) return;
+
+      const name = document.getElementById('editRecName').value.trim();
+      const amount = Number(document.getElementById('editRecAmount').value);
+      const cycle = document.getElementById('editRecCycle').value || 'monthly';
+      const day = Math.min(28, Math.max(1, Number(document.getElementById('editRecDay').value) || 1));
+      const accountId = document.getElementById('editRecAccount').value || r.accountId;
+      const category = document.getElementById('editRecCategory').value.trim() || '訂閱固定';
+
+      if (!name || !amount || amount <= 0) {
+        showToast('⚠️ 請填寫訂閱名稱與有效金額');
+        return;
+      }
+
+      r.name = name;
+      r.amount = amount;
+      r.cycle = cycle;
+      r.BillingDay = day;
+      r.accountId = accountId;
+      r.category = category;
+      r.updatedAt = new Date().toISOString();
+
+      closeModal('recEditModal');
+      saveState(true);
+      showToast('✅ 已更新週期訂閱設定');
     }
 
     // 底部抽屜：繳清信用卡費
@@ -1711,7 +1964,12 @@
       const icon = getCategoryIcon(t.category);
       return `
         <div class="tx-item">
-          <div class="tx-left">
+          <div class="tx-left" style="cursor:pointer;flex:1;"
+            onclick="if(!lpFired)openTxEditModal('${t.id}')"
+            ontouchstart="startLongPress(()=>openTxEditModal('${t.id}'))"
+            ontouchend="cancelLongPress()"
+            ontouchmove="cancelLongPress()"
+            oncontextmenu="event.preventDefault();openTxEditModal('${t.id}')">
             <div class="tx-avatar">${icon}</div>
             <div class="tx-info">
               <div class="tx-title">
@@ -1726,7 +1984,8 @@
             <span class="tx-amt ${isTransfer ? 'val-net' : (t.type === 'income' ? 'val-in' : 'val-out')}">
               ${isTransfer ? '⇄ ' : (t.type === 'income' ? '+' : '-')}${formatMoney(t.amount)}
             </span>
-            <button class="icon-del-btn" onclick="deleteTransaction('${t.id}')">✕</button>
+            ${isTransfer ? '' : `<button class="icon-del-btn" onclick="openTxEditModal('${t.id}')" title="修改">✎</button>`}
+            <button class="icon-del-btn" onclick="deleteTransaction('${t.id}')" title="刪除">✕</button>
           </div>
         </div>
       `;
@@ -2005,7 +2264,12 @@
             const acct = getAccountById(r.accountId);
             return `
               <div class="tx-item">
-                <div class="tx-left">
+                <div class="tx-left" style="cursor:pointer;flex:1;"
+                  onclick="if(!lpFired)openRecEditModal('${r.id}')"
+                  ontouchstart="startLongPress(()=>openRecEditModal('${r.id}'))"
+                  ontouchend="cancelLongPress()"
+                  ontouchmove="cancelLongPress()"
+                  oncontextmenu="event.preventDefault();openRecEditModal('${r.id}')">
                   <div class="tx-avatar">🔁</div>
                   <div class="tx-info">
                     <div class="tx-title">
@@ -2018,7 +2282,8 @@
                 </div>
                 <div class="tx-right">
                   <span class="tx-amt ${r.type === 'income' ? 'val-in' : 'val-out'}">${formatMoney(r.amount)}</span>
-                  <button class="icon-del-btn" onclick="deleteRecurringItem('${r.id}')">✕</button>
+                  <button class="icon-del-btn" onclick="openRecEditModal('${r.id}')" title="修改">✎</button>
+                  <button class="icon-del-btn" onclick="deleteRecurringItem('${r.id}')" title="刪除">✕</button>
                 </div>
               </div>
             `;
