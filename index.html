@@ -791,9 +791,10 @@
     <!-- ==================== 分頁 1：秒記台 ==================== -->
     <section id="tab-entry" class="tab-page active">
       <div class="card">
-        <div class="seg-group">
+        <div class="seg-group" style="grid-template-columns: repeat(3, 1fr);">
           <button id="modeExpenseBtn" class="seg-btn active expense-mode" onclick="setEntryType('expense')">支出 (-)</button>
           <button id="modeIncomeBtn" class="seg-btn income-mode" onclick="setEntryType('income')">收入 (+)</button>
+          <button class="seg-btn neutral-mode" onclick="openTransferModal()">⇄ 互轉</button>
         </div>
 
         <!-- 1. 常用品項快選（點一下帶入，長按或點✎修改） -->
@@ -1022,7 +1023,10 @@
       <div class="card">
         <div class="card-header">
           <span class="card-title">🏦 現金 / 銀行 / 投資帳戶</span>
-          <button class="btn-pill" onclick="openAccountModal()">＋ 新增帳戶</button>
+          <div style="display:flex;gap:6px;">
+            <button class="btn-pill" onclick="openTransferModal()">⇄ 互轉</button>
+            <button class="btn-pill" onclick="openAccountModal()">＋ 新增帳戶</button>
+          </div>
         </div>
         <div class="tx-list" id="cashAccountList" style="margin-bottom:14px;"></div>
 
@@ -1197,6 +1201,33 @@
     </div>
   </div>
 
+  <!-- 6. 帳戶互轉抽屜 -->
+  <div id="transferModal" class="sheet-backdrop" onclick="if(event.target===this)closeModal('transferModal')">
+    <div class="bottom-sheet">
+      <div class="sheet-handle"></div>
+      <div class="sheet-title">
+        <span>⇄ 帳戶之間互轉</span>
+        <button class="clear-amt-btn" onclick="closeModal('transferModal')">✕</button>
+      </div>
+      <div class="form-row">
+        <div>
+          <div style="font-size:11px;color:var(--muted);margin-bottom:4px;">轉出帳戶（扣款）</div>
+          <select id="transferFromSelect"></select>
+        </div>
+        <div>
+          <div style="font-size:11px;color:var(--muted);margin-bottom:4px;">轉入帳戶（收款 / 繳卡）</div>
+          <select id="transferToSelect"></select>
+        </div>
+      </div>
+      <div class="form-row">
+        <input type="date" id="transferDate" class="input" />
+        <input type="number" inputmode="decimal" id="transferAmount" class="input" placeholder="轉帳金額" />
+      </div>
+      <input type="text" id="transferNote" class="input" placeholder="備註（選填，例：ATM 領錢、轉投資戶）" style="margin-bottom:14px;" />
+      <button class="primary-cta" onclick="confirmTransfer()">確認互轉（不計入當月支出）</button>
+    </div>
+  </div>
+
   <script>
     const STORAGE_KEY = 'POCKET_LEDGER_STATE_V2';
     const LEGACY_KEY = 'POCKET_LEDGER_STATE_V1';
@@ -1275,6 +1306,7 @@
       const found = [...EXPENSE_CATS, ...INCOME_CATS].find(c => c.name === catName);
       if (found) return found.icon;
       if (catName === '繳信用卡費') return '💳';
+      if (catName === '帳戶互轉') return '⇄';
       return '📌';
     }
 
@@ -1602,9 +1634,18 @@
 
       if (tx.type === 'transfer') {
         const fromAcct = state.accounts.find(a => a.id === tx.accountId);
-        const toCard = state.accounts.find(a => a.id === tx.toAccountId);
-        if (fromAcct) fromAcct.balance = (Number(fromAcct.balance) || 0) + Number(tx.amount);
-        if (toCard) toCard.balance = (Number(toCard.balance) || 0) + Number(tx.amount);
+        const toAcct = state.accounts.find(a => a.id === tx.toAccountId);
+        const amt = Number(tx.amount) || 0;
+        if (fromAcct) {
+          if (fromAcct.kind === 'credit') fromAcct.balance = (Number(fromAcct.balance) || 0) - amt;
+          else fromAcct.balance = (Number(fromAcct.balance) || 0) + amt;
+          fromAcct.updatedAt = new Date().toISOString();
+        }
+        if (toAcct) {
+          if (toAcct.kind === 'credit') toAcct.balance = (Number(toAcct.balance) || 0) + amt;
+          else toAcct.balance = (Number(toAcct.balance) || 0) - amt;
+          toAcct.updatedAt = new Date().toISOString();
+        }
       } else if (tx.accountId) {
         applyAccountDelta(tx.accountId, tx.type, tx.amount, true);
       }
@@ -1614,12 +1655,81 @@
       showToast('🗑️ 已刪除並還原帳戶餘額');
     }
 
+    // 底部抽屜：一般帳戶之間互轉
+    function openTransferModal() {
+      if (state.accounts.length < 2) {
+        showToast('⚠️ 至少需要 2 個帳戶才能互轉');
+        return;
+      }
+      const fromSel = document.getElementById('transferFromSelect');
+      const toSel = document.getElementById('transferToSelect');
+      const nonCredit = state.accounts.find(a => a.kind !== 'credit') || state.accounts[0];
+      const other = state.accounts.find(a => a.id !== nonCredit.id) || state.accounts[1];
+
+      fillAccountSelect(fromSel, nonCredit.id);
+      fillAccountSelect(toSel, other.id);
+
+      document.getElementById('transferDate').value = todayISO();
+      document.getElementById('transferAmount').value = '';
+      document.getElementById('transferNote').value = '';
+      openModal('transferModal');
+      setTimeout(() => document.getElementById('transferAmount').focus(), 100);
+    }
+
+    function confirmTransfer() {
+      const fromId = document.getElementById('transferFromSelect').value;
+      const toId = document.getElementById('transferToSelect').value;
+      const dateVal = document.getElementById('transferDate').value || todayISO();
+      const amt = Number(document.getElementById('transferAmount').value);
+      const noteVal = document.getElementById('transferNote').value.trim();
+
+      if (fromId === toId) {
+        showToast('⚠️ 轉出與轉入帳戶不能相同');
+        return;
+      }
+      if (!amt || amt <= 0) {
+        showToast('⚠️ 請輸入有效轉帳金額');
+        return;
+      }
+
+      const fromAcct = state.accounts.find(a => a.id === fromId);
+      const toAcct = state.accounts.find(a => a.id === toId);
+      if (!fromAcct || !toAcct) return;
+
+      // 扣減轉出帳戶、增加轉入帳戶（若目標是信用卡則減少待繳）
+      if (fromAcct.kind === 'credit') fromAcct.balance = (Number(fromAcct.balance) || 0) + amt;
+      else fromAcct.balance = (Number(fromAcct.balance) || 0) - amt;
+      fromAcct.updatedAt = new Date().toISOString();
+
+      if (toAcct.kind === 'credit') toAcct.balance = Math.max(0, (Number(toAcct.balance) || 0) - amt);
+      else toAcct.balance = (Number(toAcct.balance) || 0) + amt;
+      toAcct.updatedAt = new Date().toISOString();
+
+      const isCardPay = toAcct.kind === 'credit';
+      state.transactions.unshift({
+        id: 'tx_tr_' + Date.now() + '_' + Math.random().toString(36).slice(2, 5),
+        date: dateVal,
+        type: 'transfer',
+        category: isCardPay ? '繳信用卡費' : '帳戶互轉',
+        amount: amt,
+        accountId: fromAcct.id,
+        toAccountId: toAcct.id,
+        note: noteVal || `${fromAcct.name} ➔ ${toAcct.name}`,
+        source: 'transfer',
+        updatedAt: new Date().toISOString()
+      });
+
+      closeModal('transferModal');
+      saveState(true);
+      showToast(`⇄ 已轉帳 ${formatMoney(amt)}：${fromAcct.name} ➔ ${toAcct.name}`);
+    }
+
     // 底部抽屜：修改已記帳收支明細（先沖銷舊帳戶餘額，再套用新帳戶與金額）
     function openTxEditModal(txId) {
       const tx = state.transactions.find(t => t.id === txId);
       if (!tx) return;
       if (tx.type === 'transfer') {
-        showToast('💡 繳卡費紀錄請直接刪除後重按繳卡費');
+        showToast('💡 轉帳 / 繳卡費紀錄請直接刪除後重記');
         return;
       }
 
